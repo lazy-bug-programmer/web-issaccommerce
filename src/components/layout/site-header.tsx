@@ -107,9 +107,6 @@ export function SiteHeader() {
               <Button variant="ghost" size="sm" asChild>
                 <Link href="/login">Login</Link>
               </Button>
-              <Button size="sm" asChild>
-                <Link href="/signup">Sign up</Link>
-              </Button>
             </div>
           )}
         </div>

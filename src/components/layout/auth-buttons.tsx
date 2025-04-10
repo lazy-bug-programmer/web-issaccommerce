@@ -25,9 +25,6 @@ export default function AuthButtons() {
       <Button asChild size="lg">
         <Link href="/login">Login</Link>
       </Button>
-      <Button asChild variant="outline" size="lg">
-        <Link href="/signup">Sign Up</Link>
-      </Button>
     </div>
   );
 }
