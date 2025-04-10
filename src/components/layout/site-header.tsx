@@ -16,7 +16,7 @@ import { createClient } from "@/lib/appwrite/client";
 
 export function SiteHeader() {
   const client = createClient();
-  const { user, setUser, isLoggedIn, isAdmin, logout } = useAuth();
+  const { user, setUser, isLoggedIn, isAdmin, isSeller, logout } = useAuth();
 
   // Function to get user initials
   const getUserInitials = () => {
@@ -69,7 +69,7 @@ export function SiteHeader() {
             Home
           </Link>
           <Link
-            href="/products"
+            href="/product"
             className="text-sm font-medium transition-colors hover:text-primary"
           >
             Products
@@ -93,9 +93,12 @@ export function SiteHeader() {
                   </DropdownMenuItem>
                 )}
 
-                <DropdownMenuItem asChild>
-                  <Link href="/profile">Profile</Link>
-                </DropdownMenuItem>
+                {isSeller && (
+                  <DropdownMenuItem asChild>
+                    <Link href="/seller">Seller Dashboard</Link>
+                  </DropdownMenuItem>
+                )}
+
                 <DropdownMenuItem onClick={logout}>Sign out</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

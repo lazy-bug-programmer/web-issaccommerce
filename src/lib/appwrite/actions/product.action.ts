@@ -142,11 +142,14 @@ export async function createProduct(product: Omit<Product, "user_id">) {
 }
 
 // READ
-export async function getProducts(limit = 10, keyword = "") {
+export async function getProducts(limit = 10, offset = 0, keyword = "") {
     try {
         const { databases } = await createClient();
 
-        const queries = [Query.limit(limit)];
+        const queries = [
+            Query.limit(limit),
+            Query.offset(offset)
+        ];
 
         // Add search query if keyword is provided
         if (keyword && keyword.trim()) {
@@ -159,10 +162,13 @@ export async function getProducts(limit = 10, keyword = "") {
             queries
         );
 
-        return { data: products.documents };
+        return {
+            data: products.documents,
+            total: products.total
+        };
     } catch (error: any) {
         console.error("Error getting products:", error);
-        return { error: error.message || "Failed to get products" };
+        return { error: error.message || "Failed to get products", total: 0 };
     }
 }
 

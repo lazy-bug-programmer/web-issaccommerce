@@ -158,7 +158,10 @@ export default function ProductsPage() {
   async function fetchProducts() {
     setIsLoading(true);
     try {
-      const response = await getProducts(limit, keyword); // Pass keyword to getProducts
+      // Use offset pagination
+      const offset = (page - 1) * limit;
+      const response = await getProducts(limit, offset, keyword);
+
       if (response.error) {
         toast.error(response.error);
         return;
@@ -169,7 +172,9 @@ export default function ProductsPage() {
           (doc) => doc as unknown as Product
         );
         setProducts(productData);
-        setTotalPages(Math.ceil(response.data.length / limit));
+
+        // Use the total from the response for pagination
+        setTotalPages(Math.ceil((response.total || 0) / limit));
       }
     } catch {
       toast.error("Failed to fetch products");

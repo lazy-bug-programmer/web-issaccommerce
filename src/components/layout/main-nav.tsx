@@ -65,11 +65,6 @@ export function MainNav() {
             active: pathname === "/seller/products",
           },
           {
-            href: "/seller/tasks",
-            label: "Tasks",
-            active: pathname === "/seller/tasks",
-          },
-          {
             href: "/seller/shipments",
             label: "Shipments",
             active: pathname === "/seller/shipments",
