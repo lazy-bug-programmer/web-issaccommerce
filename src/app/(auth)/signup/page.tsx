@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -24,66 +25,59 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { setCookie } from "typescript-cookie";
-import { createClient } from "@/lib/appwrite/client";
-import { useAuth } from "@/lib/auth-context";
-import Link from "next/link";
-import { lookupUserByPhone } from "@/lib/appwrite/actions/auth.action";
+import { signUpUser } from "@/lib/appwrite/actions/auth.action";
 
-const formSchema = z.object({
-  phone: z.string().min(10, { message: "Please enter a valid phone number" }),
-  password: z.string().min(6, {
-    message: "Password must be at least 6 characters",
-  }),
-});
+const formSchema = z
+  .object({
+    name: z.string().min(2, {
+      message: "Name must be at least 2 characters",
+    }),
+    phone: z.string().min(10, {
+      message: "Please enter a valid phone number",
+    }),
+    password: z.string().min(6, {
+      message: "Password must be at least 6 characters",
+    }),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
 
-export default function LoginPage() {
-  const { setUser } = useAuth();
+export default function SignupPage() {
   const router = useRouter();
-  const client = createClient();
   const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      name: "",
       phone: "",
       password: "",
+      confirmPassword: "",
     },
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
-
     try {
-      // First lookup the user by phone to get their email
-      const userLookup = await lookupUserByPhone(values.phone);
+      const res = await signUpUser(
+        values.name,
+        values.phone,
+        values.password,
+        values.confirmPassword
+      );
 
-      if (!userLookup.email) {
-        toast(userLookup.error || "User not found");
-        setIsLoading(false);
+      if (res.error) {
+        toast(res.error);
         return;
       }
 
-      // Then use the email to login on client side
-      await client.account.createEmailPasswordSession(
-        userLookup.email,
-        values.password
-      );
-
-      setCookie(
-        "user-session",
-        String(
-          Object.values(JSON.parse(localStorage.getItem("cookieFallback")!))[0]
-        )
-      );
-
-      const currentUser = await client.account.get();
-      setUser(currentUser);
-
-      toast("Login successful, redirecting...");
-      router.replace("/");
+      toast("Registration successful, you can now login!");
+      router.push("/login");
     } catch {
-      toast("Login failed, please try again");
+      toast("Registration failed, please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -94,15 +88,28 @@ export default function LoginPage() {
       <Card className="w-full max-w-md mx-auto">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center">
-            Login
+            Sign Up
           </CardTitle>
           <CardDescription className="text-center">
-            Enter your credentials to access your account
+            Create an account to start selling on our platform
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="John Doe" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <FormField
                 control={form.control}
                 name="phone"
@@ -129,17 +136,30 @@ export default function LoginPage() {
                   </FormItem>
                 )}
               />
+              <FormField
+                control={form.control}
+                name="confirmPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Confirm Password</FormLabel>
+                    <FormControl>
+                      <Input type="password" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Logging in..." : "Login"}
+                {isLoading ? "Creating account..." : "Sign Up"}
               </Button>
             </form>
           </Form>
         </CardContent>
         <CardFooter className="flex justify-center flex-wrap">
           <p className="text-sm text-muted-foreground text-center">
-            Don&apos;t have an account?{" "}
-            <Link href="/signup" className="text-primary hover:underline">
-              Sign up
+            Already have an account?{" "}
+            <Link href="/login" className="text-primary hover:underline">
+              Login
             </Link>
           </p>
         </CardFooter>
