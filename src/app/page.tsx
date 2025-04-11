@@ -2,7 +2,7 @@ import ProductDisplay from "@/components/products/product-display";
 import { getProducts } from "@/lib/appwrite/actions/product.action";
 import { Product } from "@/lib/domains/products.domain";
 import AuthButtons from "@/components/layout/auth-buttons";
-import TaskCard from "@/components/tasks/task-card";
+import PointsDisplay from "@/components/tasks/points-display";
 
 export default async function Home() {
   const result = await getProducts(20);
@@ -19,10 +19,10 @@ export default async function Home() {
         </p>
       </div>
 
-      {/* Task card with confetti animation - centered with flex */}
+      {/* Points display - centered with flex */}
       <div className="flex justify-center mb-12">
         <div className="w-full max-w-4xl">
-          <TaskCard />
+          <PointsDisplay />
         </div>
       </div>
 
