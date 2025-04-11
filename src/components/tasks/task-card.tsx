@@ -1,110 +1,30 @@
 "use client";
 
-import { useState, useEffect, useRef, JSX } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import Confetti from "react-confetti";
 import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { getUserTasks, updateTask } from "@/lib/appwrite/actions/task.action";
+import { getUserTasks } from "@/lib/appwrite/actions/task.action";
 import { Task } from "@/lib/domains/task.domain";
 import { LockIcon } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { MoneyRainAnimation } from "@/components/animations/money-rain";
-import { RainbowExplosion } from "@/components/animations/rainbox-explosion";
-import { FireworksDisplay } from "@/components/animations/fireworks-display";
-import { CoinShower } from "@/components/animations/coin-shower";
-import { BalloonRelease } from "@/components/animations/baloon-release";
-import { CreditCardRain } from "../animations/credit-card-rain";
-import { DiamondShower } from "../animations/diamond-shower";
-import { ShoppingBags } from "../animations/shopping-bags";
-import { GiftCards } from "../animations/gift-card";
+import { useRouter } from "next/navigation";
 
 // Types for the progress JSON structure
 interface ProgressData {
   [key: string]: boolean;
 }
 
-// Type for animation components
-type AnimationComponent = () => JSX.Element;
-
 export default function TaskCard() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showConfetti, setShowConfetti] = useState(false);
-  const [confettiWidth, setConfettiWidth] = useState(0);
-  const [confettiHeight, setConfettiHeight] = useState(0);
-  const [activeAnimation, setActiveAnimation] = useState<{
-    component: AnimationComponent | null;
-    visible: boolean;
-  }>({ component: null, visible: false });
-  const [completionDialog, setCompletionDialog] = useState<{
-    open: boolean;
-    taskId: string;
-    taskKey: string;
-  }>({ open: false, taskId: "", taskKey: "" });
-
-  // Timer reference for animation
-  const animationTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const dialogTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Map to store task animations
-  const taskAnimationsRef = useRef<Map<string, AnimationComponent>>(new Map());
-
-  // List of available animations
-  const animations: AnimationComponent[] = [
-    MoneyRainAnimation,
-    RainbowExplosion,
-    FireworksDisplay,
-    CoinShower,
-    BalloonRelease,
-    CreditCardRain,
-    DiamondShower,
-    ShoppingBags,
-    GiftCards,
-  ];
-
-  // Function to get a random animation
-  const getRandomAnimation = (): AnimationComponent => {
-    const randomIndex = Math.floor(Math.random() * animations.length);
-    return animations[randomIndex];
-  };
-
-  // Function to assign animations to tasks
-  const assignAnimationsToTasks = (taskList: Task[]) => {
-    taskList.forEach((task) => {
-      if (!task.progress) return;
-
-      try {
-        const progressData: ProgressData = JSON.parse(task.progress);
-        Object.keys(progressData).forEach((key) => {
-          // Only assign if not already assigned
-          if (!taskAnimationsRef.current.has(`${task.$id}-${key}`)) {
-            taskAnimationsRef.current.set(
-              `${task.$id}-${key}`,
-              getRandomAnimation()
-            );
-          }
-        });
-      } catch (error) {
-        console.error("Error parsing progress data:", error);
-      }
-    });
-  };
+  const router = useRouter();
 
   useEffect(() => {
     async function fetchTasks() {
@@ -112,142 +32,22 @@ export default function TaskCard() {
       if (result.data) {
         const taskData = result.data as unknown as Task[];
         setTasks(taskData);
-        assignAnimationsToTasks(taskData);
       }
       setLoading(false);
     }
 
     fetchTasks();
-
-    // For confetti dimensions
-    setConfettiWidth(window.innerWidth);
-    setConfettiHeight(window.innerHeight);
-
-    const handleResize = () => {
-      setConfettiWidth(window.innerWidth);
-      setConfettiHeight(window.innerHeight);
-    };
-
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const handleCompleteTask = async (taskId: string, taskKey: string) => {
+  const handleCompleteTask = async () => {
     try {
-      // Get the current task
-      const task = tasks.find((t) => t.$id === taskId);
-      if (!task || !task.progress) return;
-
-      // Parse the progress JSON
-      const progressData: ProgressData = JSON.parse(task.progress);
-
-      // Update the specific task to completed
-      progressData[taskKey] = true;
-
-      // Save the updated progress
-      const result = await updateTask(taskId, {
-        progress: JSON.stringify(progressData),
-      });
-
-      if (result.data) {
-        setTasks(
-          tasks.map((t) =>
-            t.$id === taskId
-              ? { ...t, progress: JSON.stringify(progressData) }
-              : t
-          )
-        );
-
-        // Show confetti if all tasks are completed
-        const allCompleted = Object.values(progressData).every(
-          (val) => val === true
-        );
-        if (allCompleted) {
-          setShowConfetti(true);
-          setTimeout(() => setShowConfetti(false), 5000);
-        }
-      }
+      // Skip updating the task
+      // Just redirect to the task page
+      router.push("/task");
     } catch (error) {
-      console.error("Error completing task:", error);
+      console.error("Error redirecting:", error);
     }
   };
-
-  const openCompletionDialog = (taskId: string, taskKey: string) => {
-    // Get the animation for this task
-    const animation =
-      taskAnimationsRef.current.get(`${taskId}-${taskKey}`) ||
-      getRandomAnimation();
-
-    // Start animation
-    setActiveAnimation({
-      component: animation,
-      visible: true,
-    });
-
-    // Clear any existing timers
-    if (animationTimerRef.current) {
-      clearTimeout(animationTimerRef.current);
-    }
-    if (dialogTimerRef.current) {
-      clearTimeout(dialogTimerRef.current);
-    }
-
-    // After 5 seconds, stop the animation and show the dialog
-    animationTimerRef.current = setTimeout(() => {
-      setActiveAnimation((prev) => ({ ...prev, visible: false }));
-
-      // Open the dialog
-      setCompletionDialog({
-        open: true,
-        taskId,
-        taskKey,
-      });
-
-      animationTimerRef.current = null;
-    }, 5000);
-
-    console.log("Animation started", {
-      taskId,
-      taskKey,
-      animation: animation.name,
-    });
-  };
-
-  const closeCompletionDialog = () => {
-    setCompletionDialog({
-      open: false,
-      taskId: "",
-      taskKey: "",
-    });
-
-    // Also ensure animation is stopped
-    setActiveAnimation({
-      component: null,
-      visible: false,
-    });
-
-    // Clear timers
-    if (animationTimerRef.current) {
-      clearTimeout(animationTimerRef.current);
-      animationTimerRef.current = null;
-    }
-    if (dialogTimerRef.current) {
-      clearTimeout(dialogTimerRef.current);
-      dialogTimerRef.current = null;
-    }
-  };
-
-  // Cleanup timers on unmount
-  useEffect(() => {
-    return () => {
-      if (animationTimerRef.current) {
-        clearTimeout(animationTimerRef.current);
-      }
-      if (dialogTimerRef.current) {
-        clearTimeout(dialogTimerRef.current);
-      }
-    };
-  }, []);
 
   const getProgressPercentage = (task: Task) => {
     try {
@@ -321,16 +121,6 @@ export default function TaskCard() {
 
       const progressData: ProgressData = JSON.parse(task.progress);
 
-      // If animations haven't been assigned to these tasks yet, do it now
-      if (!taskAnimationsRef.current.size) {
-        Object.keys(progressData).forEach((key) => {
-          taskAnimationsRef.current.set(
-            `${task.$id}-${key}`,
-            getRandomAnimation()
-          );
-        });
-      }
-
       return Object.entries(progressData).map(([key, completed]) => {
         const isPaywall = key.startsWith("paywall");
         const available = isTaskAvailable(key, progressData);
@@ -390,7 +180,7 @@ export default function TaskCard() {
                 {!completed && available && (
                   <Button
                     size="sm"
-                    onClick={() => openCompletionDialog(task.$id, key)}
+                    onClick={() => handleCompleteTask()}
                     className="ml-2 bg-gradient-to-r from-green-400 to-emerald-600 hover:from-green-500 hover:to-emerald-700 shadow-sm"
                   >
                     Complete
@@ -417,7 +207,7 @@ export default function TaskCard() {
 
   if (loading) {
     return (
-      <Card className="w-full max-w-md mx-auto mb-8 animate-pulse">
+      <Card className="w-full max-w-2xl mx-auto mb-8 animate-pulse">
         <CardHeader className="bg-muted h-20"></CardHeader>
         <CardContent className="h-40"></CardContent>
       </Card>
@@ -429,27 +219,38 @@ export default function TaskCard() {
   }
 
   return (
-    <>
-      {showConfetti && (
-        <Confetti
-          width={confettiWidth}
-          height={confettiHeight}
-          recycle={false}
-          numberOfPieces={500}
-        />
-      )}
+    <div className="w-full max-w-2xl mx-auto">
+      {/* Redesigned points display card */}
+      <div className="mb-8">
+        <Card className="w-full border-2 border-primary/50 shadow-lg overflow-visible">
+          <div className="flex items-center">
+            {/* Points information */}
+            <div className="flex-1 p-4">
+              <h3 className="text-lg font-semibold mb-2">Your Points</h3>
+              <p className="text-sm text-muted-foreground">
+                Complete tasks to earn more points
+              </p>
+            </div>
 
-      {/* Semi-transparent overlay when animation is active */}
-      {activeAnimation.visible && (
-        <div className="fixed inset-0 bg-gray-900/70 z-[90]" />
-      )}
-
-      {/* Animation outside of dialog with z-index 100 */}
-      {activeAnimation.visible && activeAnimation.component && (
-        <div className="fixed inset-0 z-[100] pointer-events-none">
-          <activeAnimation.component />
-        </div>
-      )}
+            {/* Points display with circular indicator */}
+            <div className="p-6 pr-8">
+              <div className="relative">
+                <div className="flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-br from-indigo-600 via-purple-600 to-purple-700 shadow-lg">
+                  <div className="text-center">
+                    <span className="text-3xl font-bold text-white">
+                      {tasks[0]?.point || 0}
+                    </span>
+                    <span className="text-xs text-white/90 block">points</span>
+                  </div>
+                </div>
+                {/* Decorative elements */}
+                <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-pink-500 opacity-70"></div>
+                <div className="absolute -bottom-1 -left-1 w-4 h-4 rounded-full bg-blue-400 opacity-70"></div>
+              </div>
+            </div>
+          </div>
+        </Card>
+      </div>
 
       <div className="mb-10 relative z-10">
         <AnimatePresence>
@@ -464,7 +265,7 @@ export default function TaskCard() {
             >
               <Card className="overflow-hidden shadow-lg border-2 hover:border-primary transition-all duration-300">
                 <CardHeader className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">
-                  <CardTitle>Your Learning Path</CardTitle>
+                  <CardTitle>Your Task Path</CardTitle>
                   <CardDescription className="text-white/80">
                     {getProgressPercentage(task) === 100
                       ? "All tasks completed! Great job!"
@@ -496,74 +297,11 @@ export default function TaskCard() {
                     </div>
                   </div>
                 </CardContent>
-                <CardFooter className="bg-muted/20 flex justify-between gap-2">
-                  <div className="text-sm text-muted-foreground">
-                    Complete all tasks to earn a certificate
-                  </div>
-                  {getProgressPercentage(task) === 100 && (
-                    <Button
-                      variant="outline"
-                      className="border-green-500 text-green-600"
-                    >
-                      Download Certificate
-                    </Button>
-                  )}
-                </CardFooter>
               </Card>
             </motion.div>
           ))}
         </AnimatePresence>
       </div>
-
-      <Dialog
-        open={completionDialog.open}
-        onOpenChange={(open) => {
-          if (!open) closeCompletionDialog();
-        }}
-        modal={true}
-      >
-        <DialogContent className="sm:max-w-md backdrop-blur-sm bg-white/90 dark:bg-gray-950/90 border-2 border-primary shadow-2xl z-50">
-          <div className="relative z-10">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold">
-                Congratulations!
-              </DialogTitle>
-              <DialogDescription>
-                You&apos;ve completed your task! Click the button below to
-                confirm and continue your learning journey.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="py-8 flex items-center justify-center">
-              <div className="bg-white/90 dark:bg-black/90 p-5 rounded-lg text-center shadow-lg border border-gray-200 dark:border-gray-800">
-                <h3 className="text-lg font-semibold mb-2">
-                  Great job on completing this step!
-                </h3>
-                <p className="text-sm mb-4">
-                  Continue to unlock more knowledge and skills.
-                </p>
-                <div className="w-full h-1 bg-gradient-to-r from-green-400 to-emerald-600 mt-2"></div>
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button
-                onClick={() => {
-                  handleCompleteTask(
-                    completionDialog.taskId,
-                    completionDialog.taskKey
-                  );
-                  closeCompletionDialog();
-                }}
-                className="bg-gradient-to-r from-green-400 to-emerald-600 hover:from-green-500 hover:to-emerald-700 shadow-sm"
-                size="lg"
-              >
-                Complete Task
-              </Button>
-            </DialogFooter>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
+    </div>
   );
 }
