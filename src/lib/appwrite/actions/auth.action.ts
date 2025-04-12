@@ -79,3 +79,47 @@ export async function logoutUser() {
     return { error: "Logout failed" };
   }
 }
+
+export async function updateUserInfo(
+  userId: string,
+  name: string,
+  phone: string
+) {
+  try {
+    const client = await createAdminClient();
+
+    // Update user name
+    await client.users.updateName(userId, name);
+
+    // Update phone number (ensuring it has the +6 prefix)
+    const formattedPhone = phone.startsWith('+6') ? phone : '+6' + phone;
+    await client.users.updatePhone(userId, formattedPhone);
+
+    return { success: true, message: "Profile updated successfully" };
+  } catch (error) {
+    console.error("Error updating user info:", error);
+    return { success: false, error: "Failed to update profile" };
+  }
+}
+
+export async function getUserById(userId: string) {
+  try {
+    const client = await createAdminClient();
+
+    // Fetch the user by ID
+    const user = await client.users.get(userId);
+
+    return {
+      success: true,
+      user: {
+        id: user.$id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone
+      }
+    };
+  } catch (error) {
+    console.error("Error fetching user:", error);
+    return { success: false, error: "Failed to fetch user information" };
+  }
+}

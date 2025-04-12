@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
-import { Users, Truck } from "lucide-react";
+import { Users, Truck, DollarSign } from "lucide-react";
 
 export default function AdminDashboard() {
   return (
@@ -29,6 +29,22 @@ export default function AdminDashboard() {
           </Card>
         </Link>
 
+        <Link href="/admin/withdrawal" className="block h-full">
+          <Card className="h-full transition-all hover:shadow-md hover:border-primary/50">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-xl font-semibold">
+                Withdrawal Management
+              </CardTitle>
+              <DollarSign className="h-6 w-6 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">
+                Manage withdrawal requests.
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+
         <Link href="/admin/shipment_automation" className="block h-full">
           <Card className="h-full transition-all hover:shadow-md hover:border-primary/50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -45,20 +61,6 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
         </Link>
-
-        {/* <Link href="/admin/product" className="block h-full">
-          <Card className="h-full transition-all hover:shadow-md hover:border-primary/50">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xl font-semibold">
-                Product Management
-              </CardTitle>
-              <Package className="h-6 w-6 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">Manage products</p>
-            </CardContent>
-          </Card>
-        </Link> */}
       </div>
     </div>
   );

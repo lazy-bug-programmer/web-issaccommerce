@@ -93,6 +93,28 @@ export async function getUserSales() {
     }
 }
 
+// Get sales by user ID (for admin)
+export async function getSalesByUserId(userId: string) {
+    try {
+        const { databases } = await createAdminClient();
+
+        const sales = await databases.listDocuments(
+            DATABASE_ID,
+            SALES_COLLECTION_ID,
+            [Query.equal("user_id", userId)]
+        );
+
+        if (sales.documents.length === 0) {
+            return { data: null };
+        }
+
+        return { data: sales.documents[0] };
+    } catch (error: any) {
+        console.error("Error getting sales by user ID:", error);
+        return { error: error.message || "Failed to get sales data" };
+    }
+}
+
 // UPDATE
 export async function updateSale(saleId: string, updates: Partial<Sale>) {
     try {

@@ -6,6 +6,13 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/lib/auth-context";
 import Link from "next/link";
+import {
+  Home,
+  ShoppingBag,
+  CheckSquare,
+  MessageCircle,
+  User,
+} from "lucide-react";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -25,12 +32,12 @@ export default function RootLayout({
         <AuthProvider>
           <SiteHeader />
 
-          <main className="mx-auto container">{children}</main>
+          <main className="mx-auto container pb-20">{children}</main>
 
           {/* WhatsApp floating button */}
           <Link href="/contact">
             <button
-              className="p-1 fixed bottom-6 right-6 bg-green-500 hover:bg-green-600 text-white rounded-full shadow-lg transition-all duration-300 flex items-center justify-center z-50"
+              className="p-1 fixed bottom-20 right-6 bg-green-500 hover:bg-green-600 text-white rounded-full shadow-lg transition-all duration-300 flex items-center justify-center z-50"
               aria-label="Contact via WhatsApp"
             >
               <svg
@@ -44,6 +51,66 @@ export default function RootLayout({
               </svg>
             </button>
           </Link>
+
+          {/* Mobile Bottom Navigation */}
+          <div className="fixed bottom-0 left-0 right-0 h-16 bg-white dark:bg-gray-950 border-t border-gray-200 dark:border-gray-800 flex justify-around items-center z-40 px-2 shadow-lg">
+            <Link
+              href="/"
+              className="flex flex-col items-center justify-center w-full h-full text-xs group"
+            >
+              <div className="transform group-hover:-translate-y-1 transition-transform">
+                <Home className="h-6 w-6 mb-1 group-hover:text-blue-500 transition-colors" />
+              </div>
+              <span className="group-hover:text-blue-500 transition-colors">
+                Home
+              </span>
+            </Link>
+            <Link
+              href="/orders"
+              className="flex flex-col items-center justify-center w-full h-full text-xs group"
+            >
+              <div className="transform group-hover:-translate-y-1 transition-transform">
+                <ShoppingBag className="h-6 w-6 mb-1 group-hover:text-blue-500 transition-colors" />
+              </div>
+              <span className="group-hover:text-blue-500 transition-colors">
+                Orders
+              </span>
+            </Link>
+
+            {/* Enhanced middle Tasks button */}
+            <Link
+              href="/task"
+              className="flex flex-col items-center justify-center w-full h-full text-xs relative -mt-5"
+            >
+              <div className="absolute -top-6 p-4 rounded-full bg-gradient-to-r from-blue-400 to-blue-600 shadow-xl border-4 border-white dark:border-gray-950 transform hover:scale-110 transition-transform">
+                <CheckSquare className="h-7 w-7 text-white" />
+              </div>
+              <span className="mt-11 font-semibold text-blue-500">Tasks</span>
+            </Link>
+
+            <Link
+              href="/contact"
+              className="flex flex-col items-center justify-center w-full h-full text-xs group"
+            >
+              <div className="transform group-hover:-translate-y-1 transition-transform">
+                <MessageCircle className="h-6 w-6 mb-1 group-hover:text-blue-500 transition-colors" />
+              </div>
+              <span className="group-hover:text-blue-500 transition-colors">
+                Contact
+              </span>
+            </Link>
+            <Link
+              href="/my"
+              className="flex flex-col items-center justify-center w-full h-full text-xs group"
+            >
+              <div className="transform group-hover:-translate-y-1 transition-transform">
+                <User className="h-6 w-6 mb-1 group-hover:text-blue-500 transition-colors" />
+              </div>
+              <span className="group-hover:text-blue-500 transition-colors">
+                Profile
+              </span>
+            </Link>
+          </div>
 
           <Toaster />
         </AuthProvider>

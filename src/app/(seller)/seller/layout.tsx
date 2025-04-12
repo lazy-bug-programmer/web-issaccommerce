@@ -17,7 +17,6 @@ export default function SellerLayout({
     { path: "/seller", label: "Dashboard" },
     { path: "/seller/product", label: "Product" },
     { path: "/seller/shipment", label: "Shipment" },
-    { path: "/seller/sales", label: "Sales" },
   ];
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);

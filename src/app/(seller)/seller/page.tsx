@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Package, Truck, BarChart } from "lucide-react";
+import { Package, Truck } from "lucide-react";
 import Link from "next/link";
 
 export default function AdminDashboard() {
@@ -36,20 +36,6 @@ export default function AdminDashboard() {
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground">Manage shipments</p>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/seller/sales" className="block h-full">
-          <Card className="h-full transition-all hover:shadow-md hover:border-primary/50">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xl font-semibold">
-                Sales Dashboard
-              </CardTitle>
-              <BarChart className="h-6 w-6 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">Track sales performance</p>
             </CardContent>
           </Card>
         </Link>
