@@ -64,9 +64,9 @@ import {
   deleteShipment,
   getShipments,
   updateShipment,
-} from "@/lib/appwrite/actions/shipments.action";
-import { getProducts } from "@/lib/appwrite/actions/product.action";
-import { getShipmentAutomations } from "@/lib/appwrite/actions/shipment-automations.action";
+} from "@/lib/actions/shipments.action";
+import { getProducts } from "@/lib/actions/product.action";
+import { getShipmentAutomations } from "@/lib/actions/shipment-automations.action";
 
 // Define a type for the shipment
 type Shipment = {

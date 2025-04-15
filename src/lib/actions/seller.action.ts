@@ -2,8 +2,8 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { uuidv4 } from "@/lib/guid";
-import { createAdminClient } from "../server";
 import { Query } from "node-appwrite";
+import { createAdminClient } from "../appwrite/server";
 
 export async function createSeller(
     name: string,

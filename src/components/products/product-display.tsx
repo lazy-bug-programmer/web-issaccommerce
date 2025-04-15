@@ -12,7 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ShoppingCart } from "lucide-react";
-import { getProductImage } from "@/lib/appwrite/actions/product.action";
+import { getProductImage } from "@/lib/actions/product.action";
 import { Product } from "@/lib/domains/products.domain";
 
 // Image component that handles loading the image

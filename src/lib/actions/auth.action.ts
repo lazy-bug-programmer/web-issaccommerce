@@ -29,7 +29,7 @@ export async function signUpUser(
     await client.users.updatePhone(user.$id, "+6" + phone);
     await client.users.updateLabels(user.$id, ['SELLER']);
 
-    return { message: "Account created successfully" };
+    return { message: "Account created successfully", user_id: userId };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     if (err) {

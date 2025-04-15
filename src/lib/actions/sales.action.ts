@@ -24,7 +24,6 @@ export async function createSale(sale: Sale) {
             "unique()",
             {
                 user_id: sale.user_id,
-                task_complete: sale.task_complete,
                 total_sales: sale.total_sales,
             }
         );
@@ -210,38 +209,6 @@ export async function updateTotalSales(saleId: string, amount: number) {
     } catch (error: any) {
         console.error("Error updating total sales:", error);
         return { error: error.message || "Failed to update total sales" };
-    }
-}
-
-export async function incrementTaskComplete(saleId: string) {
-    try {
-        const user = await getLoggedInUser();
-        if (!user) {
-            return { error: "Not authorized" };
-        }
-
-        const { databases } = await createAdminClient();
-
-        // First check if the sale belongs to the user
-        const sale = await databases.getDocument(
-            DATABASE_ID,
-            SALES_COLLECTION_ID,
-            saleId
-        );
-
-        const updatedSale = await databases.updateDocument(
-            DATABASE_ID,
-            SALES_COLLECTION_ID,
-            saleId,
-            {
-                task_complete: sale.task_complete + 1
-            }
-        );
-
-        return { data: updatedSale };
-    } catch (error: any) {
-        console.error("Error incrementing task complete:", error);
-        return { error: error.message || "Failed to increment task complete" };
     }
 }
 

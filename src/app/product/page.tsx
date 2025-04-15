@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import ProductDisplay from "@/components/products/product-display";
-import { getProducts } from "@/lib/appwrite/actions/product.action";
+import { getProducts } from "@/lib/actions/product.action";
 import { Product } from "@/lib/domains/products.domain";
 import {
   Pagination,

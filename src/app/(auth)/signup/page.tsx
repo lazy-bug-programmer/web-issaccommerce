@@ -25,7 +25,11 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { signUpUser } from "@/lib/appwrite/actions/auth.action";
+import { signUpUser } from "@/lib/actions/auth.action";
+import {
+  validateReferralCode,
+  redeemReferralCode,
+} from "@/lib/actions/referral-code.action";
 
 const formSchema = z
   .object({
@@ -39,6 +43,9 @@ const formSchema = z
       message: "Password must be at least 6 characters",
     }),
     confirmPassword: z.string(),
+    referralCode: z.string().min(6, {
+      message: "Please enter a valid referral code",
+    }),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",
@@ -56,12 +63,23 @@ export default function SignupPage() {
       phone: "",
       password: "",
       confirmPassword: "",
+      referralCode: "",
     },
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
     try {
+      // First validate the referral code
+      const validationResult = await validateReferralCode(values.referralCode);
+
+      if (!validationResult.valid) {
+        toast(validationResult.error);
+        setIsLoading(false);
+        return;
+      }
+
+      // If referral code is valid, proceed with signup
       const res = await signUpUser(
         values.name,
         values.phone,
@@ -71,12 +89,19 @@ export default function SignupPage() {
 
       if (res.error) {
         toast(res.error);
+        setIsLoading(false);
         return;
+      }
+
+      // If signup was successful, redeem the referral code
+      if (res.user_id) {
+        await redeemReferralCode(values.referralCode, res.user_id);
       }
 
       toast("Registration successful, you can now login!");
       router.push("/login");
-    } catch {
+    } catch (error) {
+      console.error("Signup error:", error);
       toast("Registration failed, please try again.");
     } finally {
       setIsLoading(false);
@@ -144,6 +169,22 @@ export default function SignupPage() {
                     <FormLabel>Confirm Password</FormLabel>
                     <FormControl>
                       <Input type="password" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="referralCode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Referral Code</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Enter your referral code"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

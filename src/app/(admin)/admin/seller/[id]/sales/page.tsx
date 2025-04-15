@@ -27,26 +27,18 @@ import { z } from "zod";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useParams, useRouter } from "next/navigation";
-import {
-  createSale,
-  getSales,
-  updateSale,
-} from "@/lib/appwrite/actions/sales.action";
+import { createSale, getSales, updateSale } from "@/lib/actions/sales.action";
 
 // Define a type for the sale
 type Sale = {
   $id: string;
   user_id: string;
-  task_complete: number;
   total_sales: number;
   $createdAt: string;
 };
 
 // Create a schema for updating sales
 const updateFormSchema = z.object({
-  task_complete: z.coerce.number().int().nonnegative({
-    message: "Tasks must be a non-negative number",
-  }),
   total_sales: z.coerce.number().nonnegative({
     message: "Total sales must be a non-negative number",
   }),
@@ -65,7 +57,6 @@ export default function SellerSalesPage() {
   const form = useForm<z.infer<typeof updateFormSchema>>({
     resolver: zodResolver(updateFormSchema),
     defaultValues: {
-      task_complete: 0,
       total_sales: 0,
     },
   });
@@ -79,11 +70,9 @@ export default function SellerSalesPage() {
   async function fetchSales() {
     setIsLoading(true);
     try {
-      // In a real implementation, you would fetch sales for this specific seller
       const response = await getSales();
 
       if (response && response.data) {
-        // Filter to only show sales for this seller
         const sellerSales = response.data.filter(
           (sale: any) => sale.user_id === sellerId
         );
@@ -109,9 +98,7 @@ export default function SellerSalesPage() {
       setIsSubmitting(true);
 
       if (sale) {
-        // Update existing sale
         const response = await updateSale(sale.$id, {
-          task_complete: values.task_complete,
           total_sales: values.total_sales,
         });
 
@@ -123,14 +110,11 @@ export default function SellerSalesPage() {
         toast.success("Sales data updated successfully");
         setSale({
           ...sale,
-          task_complete: values.task_complete,
           total_sales: values.total_sales,
         });
       } else {
-        // Create new sale for this seller
         const response = await createSale({
           user_id: sellerId,
-          task_complete: values.task_complete,
           total_sales: values.total_sales,
         });
 
@@ -154,12 +138,10 @@ export default function SellerSalesPage() {
   function handleEdit() {
     if (sale) {
       form.reset({
-        task_complete: sale.task_complete,
         total_sales: sale.total_sales,
       });
     } else {
       form.reset({
-        task_complete: 0,
         total_sales: 0,
       });
     }
@@ -211,22 +193,6 @@ export default function SellerSalesPage() {
               </p>
             </CardContent>
           </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Completed Tasks
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {sale?.task_complete || "0"}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Total completed tasks
-              </p>
-            </CardContent>
-          </Card>
         </div>
       )}
 
@@ -258,20 +224,6 @@ export default function SellerSalesPage() {
                         placeholder="0.00"
                         {...field}
                       />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="task_complete"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Completed Tasks</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="0" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

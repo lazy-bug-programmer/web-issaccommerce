@@ -48,7 +48,7 @@ import {
   deleteShipmentAutomation,
   getShipmentAutomations,
   updateShipmentAutomation,
-} from "@/lib/appwrite/actions/shipment-automations.action";
+} from "@/lib/actions/shipment-automations.action";
 import {
   AutomationRule,
   ShipmentAutomation,

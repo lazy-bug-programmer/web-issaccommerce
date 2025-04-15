@@ -55,7 +55,7 @@ import {
   deleteSeller,
   getAllSeller,
   updateSeller,
-} from "@/lib/appwrite/actions/seller.action";
+} from "@/lib/actions/seller.action";
 import Link from "next/link";
 
 // Define a type for the seller

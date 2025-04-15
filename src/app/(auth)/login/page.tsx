@@ -28,7 +28,7 @@ import { setCookie } from "typescript-cookie";
 import { createClient } from "@/lib/appwrite/client";
 import { useAuth } from "@/lib/auth-context";
 import Link from "next/link";
-import { lookupUserByPhone } from "@/lib/appwrite/actions/auth.action";
+import { lookupUserByPhone } from "@/lib/actions/auth.action";
 
 const formSchema = z.object({
   phone: z.string().min(10, { message: "Please enter a valid phone number" }),

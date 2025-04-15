@@ -50,7 +50,7 @@ import {
   getProductImage,
   getProducts,
   updateProduct,
-} from "@/lib/appwrite/actions/product.action";
+} from "@/lib/actions/product.action";
 import { Product } from "@/lib/domains/products.domain";
 import {
   Pagination,

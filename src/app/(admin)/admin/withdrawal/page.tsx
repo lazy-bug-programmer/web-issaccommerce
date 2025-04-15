@@ -21,9 +21,9 @@ import { Input } from "@/components/ui/input";
 import {
   adminGetAllWithdrawals,
   adminUpdateWithdrawalStatus,
-} from "@/lib/appwrite/actions/withdrawal.action";
-import { getUserById } from "@/lib/appwrite/actions/auth.action";
-import { getSalesByUserId } from "@/lib/appwrite/actions/sales.action";
+} from "@/lib/actions/withdrawal.action";
+import { getUserById } from "@/lib/actions/auth.action";
+import { getSalesByUserId } from "@/lib/actions/sales.action";
 import { toast } from "sonner";
 import { Check, X, UserRound, Loader2 } from "lucide-react";
 
@@ -50,7 +50,6 @@ type SalesData = {
   $id: string;
   user_id: string;
   total_sales: number;
-  task_complete: number;
 };
 
 export default function WithdrawalPage() {

@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { getUserTasks, updateTask } from "@/lib/appwrite/actions/task.action";
+import { getUserTasks, updateTask } from "@/lib/actions/task.action";
 import { Task } from "@/lib/domains/task.domain";
 import { LockIcon } from "lucide-react";
 import {

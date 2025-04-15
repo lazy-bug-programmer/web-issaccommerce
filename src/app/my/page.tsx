@@ -2,14 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getUserSales } from "@/lib/appwrite/actions/sales.action";
+import { getUserSales } from "@/lib/actions/sales.action";
 import {
   createWithdrawal,
   getUserWithdrawals,
-} from "@/lib/appwrite/actions/withdrawal.action";
+} from "@/lib/actions/withdrawal.action";
 import { useAuth } from "@/lib/auth-context";
-import { updateUserInfo } from "@/lib/appwrite/actions/auth.action";
+import { updateUserInfo } from "@/lib/actions/auth.action";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,11 +23,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-// Define a type for the sale
-type Sale = {
+// Define a type for the balance
+type Balance = {
   $id: string;
   user_id: string;
-  task_complete: number;
   total_sales: number;
   $createdAt: string;
 };
@@ -40,10 +40,12 @@ type Withdrawal = {
 };
 
 export default function MyPage() {
+  const router = useRouter();
   const { user } = useAuth();
-  const [sale, setSale] = useState<Sale | null>(null);
+  const [balance, setBalance] = useState<Balance | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [isDepositing, setIsDepositing] = useState(false);
   const [hasPendingWithdrawal, setHasPendingWithdrawal] = useState(false);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
 
@@ -53,7 +55,7 @@ export default function MyPage() {
   const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
-    fetchSales();
+    fetchBalance();
     fetchWithdrawals();
 
     // Initialize form with user data when available
@@ -68,23 +70,23 @@ export default function MyPage() {
     }
   }, [user]);
 
-  async function fetchSales() {
+  async function fetchBalance() {
     setIsLoading(true);
     try {
       const response = await getUserSales();
 
       if (response && response.data) {
         if (response.data.length > 0) {
-          setSale(response.data[0] as unknown as Sale);
+          setBalance(response.data[0] as unknown as Balance);
         } else {
-          setSale(null);
+          setBalance(null);
         }
       } else {
-        toast.error("Failed to fetch sales data");
+        toast.error("Failed to fetch balance data");
       }
     } catch (error) {
-      console.error("Error fetching sales:", error);
-      toast.error("Failed to fetch sales data");
+      console.error("Error fetching balance:", error);
+      toast.error("Failed to fetch balance data");
     } finally {
       setIsLoading(false);
     }
@@ -188,7 +190,7 @@ export default function MyPage() {
       return;
     }
 
-    if (!sale || sale.total_sales <= 0) {
+    if (!balance || balance.total_sales <= 0) {
       toast.error("You have no funds to withdraw");
       return;
     }
@@ -208,7 +210,7 @@ export default function MyPage() {
       } else {
         toast.success("Withdrawal request submitted successfully");
         // Refresh data
-        await fetchSales();
+        await fetchBalance();
         await fetchWithdrawals();
       }
     } catch (error) {
@@ -216,6 +218,24 @@ export default function MyPage() {
       toast.error("An unexpected error occurred");
     } finally {
       setIsWithdrawing(false);
+    }
+  }
+
+  async function handleDeposit() {
+    if (!user) {
+      toast.error("You must be logged in to make a deposit");
+      return;
+    }
+
+    setIsDepositing(true);
+    try {
+      // Redirect to contact page
+      router.push("/contact");
+    } catch (error) {
+      console.error("Error redirecting:", error);
+      toast.error("An unexpected error occurred");
+    } finally {
+      setIsDepositing(false);
     }
   }
 
@@ -229,62 +249,55 @@ export default function MyPage() {
 
       {isLoading ? (
         <div className="flex justify-center items-center h-64">
-          <p>Loading sales data...</p>
+          <p>Loading balance data...</p>
         </div>
       ) : (
         <>
           <div>
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-semibold">Sales Overview</h3>
-              <Button
-                variant="outline"
-                onClick={handleWithdrawal}
-                disabled={
-                  isWithdrawing ||
-                  !sale ||
-                  sale.total_sales <= 0 ||
-                  hasPendingWithdrawal
-                }
-                title={
-                  hasPendingWithdrawal
-                    ? "You already have a pending withdrawal request"
-                    : ""
-                }
-              >
-                {isWithdrawing ? "Processing..." : "Request Withdrawal"}
-              </Button>
+              <h3 className="text-xl font-semibold">Balance Overview</h3>
+              <div className="space-x-2">
+                <Button
+                  variant="default"
+                  onClick={handleDeposit}
+                  disabled={isDepositing}
+                >
+                  {isDepositing ? "Processing..." : "Deposit Funds"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleWithdrawal}
+                  disabled={
+                    isWithdrawing ||
+                    !balance ||
+                    balance.total_sales <= 0 ||
+                    hasPendingWithdrawal
+                  }
+                  title={
+                    hasPendingWithdrawal
+                      ? "You already have a pending withdrawal request"
+                      : ""
+                  }
+                >
+                  {isWithdrawing ? "Processing..." : "Request Withdrawal"}
+                </Button>
+              </div>
             </div>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">
-                    Total Sales
+                    Total Balance
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    ${sale?.total_sales.toFixed(2) || "0.00"}
+                    ${balance?.total_sales.toFixed(2) || "0.00"}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {sale
-                      ? `Last updated: ${formatDate(sale.$createdAt)}`
-                      : "No sales data available"}
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    Completed Tasks
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {sale?.task_complete || "0"}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Total completed tasks
+                    {balance
+                      ? `Last updated: ${formatDate(balance.$createdAt)}`
+                      : "No balance data available"}
                   </p>
                 </CardContent>
               </Card>
@@ -311,7 +324,7 @@ export default function MyPage() {
                           {formatDate(withdrawal.requested_at)}
                         </TableCell>
                         <TableCell>
-                          ${sale?.total_sales.toFixed(2) || "N/A"}
+                          ${balance?.total_sales.toFixed(2) || "N/A"}
                         </TableCell>
                         <TableCell>
                           {getStatusBadge(withdrawal.status)}

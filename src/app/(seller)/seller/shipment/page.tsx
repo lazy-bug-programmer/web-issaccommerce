@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getUserShipments } from "@/lib/appwrite/actions/shipments.action";
-import { getShipmentAutomationById } from "@/lib/appwrite/actions/shipment-automations.action";
-import { getProductById } from "@/lib/appwrite/actions/product.action";
+import { getUserShipments } from "@/lib/actions/shipments.action";
+import { getShipmentAutomationById } from "@/lib/actions/shipment-automations.action";
+import { getProductById } from "@/lib/actions/product.action";
 import {
   Table,
   TableBody,
