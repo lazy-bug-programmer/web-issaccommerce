@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { setCookie } from "typescript-cookie";
+import { getCookie, removeCookie, setCookie } from "typescript-cookie";
 import { createClient } from "@/lib/appwrite/client";
 import { useAuth } from "@/lib/auth-context";
 import Link from "next/link";
@@ -55,6 +55,13 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
+      const sessionId = getCookie("user-session-id");
+      removeCookie("user-session");
+      removeCookie("user-session-id");
+      await client.account.deleteSession(sessionId!);
+    } catch {}
+
+    try {
       // First lookup the user by phone to get their email
       const userLookup = await lookupUserByPhone(values.phone);
 
@@ -65,7 +72,7 @@ export default function LoginPage() {
       }
 
       // Then use the email to login on client side
-      await client.account.createEmailPasswordSession(
+      const session = await client.account.createEmailPasswordSession(
         userLookup.email,
         values.password
       );
@@ -76,6 +83,7 @@ export default function LoginPage() {
           Object.values(JSON.parse(localStorage.getItem("cookieFallback")!))[0]
         )
       );
+      setCookie("user-session-id", session.$id);
 
       const currentUser = await client.account.get();
       setUser(currentUser);

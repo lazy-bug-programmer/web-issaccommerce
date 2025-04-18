@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { getUserTasks, updateTask } from "@/lib/actions/task.action";
 import { Task } from "@/lib/domains/task.domain";
-import { LockIcon } from "lucide-react";
+import { LockIcon, AlertCircle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -33,6 +33,13 @@ import { DiamondShower } from "../animations/diamond-shower";
 import { ShoppingBags } from "../animations/shopping-bags";
 import { GiftCards } from "../animations/gift-card";
 import { useRouter } from "next/navigation";
+import { getTaskSettingsById } from "@/lib/actions/task-settings.action";
+import { getUserOrders } from "@/lib/actions/orders.action";
+import { Orders } from "@/lib/domains/orders.domain";
+import { TaskItem } from "@/lib/actions/task-settings.action";
+import { toast } from "sonner";
+import { getProductById } from "@/lib/actions/product.action";
+import { Product } from "@/lib/domains/products.domain";
 
 // Types for the progress JSON structure
 interface ProgressData {
@@ -57,7 +64,22 @@ export default function TaskCard() {
     open: boolean;
     taskId: string;
     taskKey: string;
-  }>({ open: false, taskId: "", taskKey: "" });
+    resetStatus?: string;
+    taskRequirements?: TaskItem | null;
+    isRequirementMet: boolean;
+  }>({ open: false, taskId: "", taskKey: "", isRequirementMet: false });
+  const [taskSettings, setTaskSettings] = useState<Record<
+    string,
+    TaskItem
+  > | null>(null);
+  const [userOrders, setUserOrders] = useState<Orders[] | null>(null);
+  const [ordersFetched, setOrdersFetched] = useState(false);
+  const [productDetails, setProductDetails] = useState<
+    Record<string, Product | null>
+  >({});
+  const [loadingProducts, setLoadingProducts] = useState<
+    Record<string, boolean>
+  >({});
 
   // Timer reference for animation
   const animationTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -107,15 +129,138 @@ export default function TaskCard() {
     });
   };
 
-  // Function to fetch tasks - extracted to be reusable
+  // Function to check if task was last edited on a different day
+  const isTaskResetNeeded = (task: Task) => {
+    if (!task.last_edit) return false;
+
+    const lastEdit = new Date(task.last_edit);
+    const today = new Date();
+
+    return (
+      lastEdit.getDate() !== today.getDate() ||
+      lastEdit.getMonth() !== today.getMonth() ||
+      lastEdit.getFullYear() !== today.getFullYear()
+    );
+  };
+
+  // Function to fetch product details for task requirements
+  const fetchProductDetails = async (productId: string) => {
+    if (loadingProducts[productId] || productDetails[productId]) {
+      return;
+    }
+
+    setLoadingProducts((prev) => ({ ...prev, [productId]: true }));
+
+    try {
+      const result = await getProductById(productId);
+      if (result.data) {
+        setProductDetails((prev) => ({
+          ...prev,
+          [productId]: result.data as unknown as Product,
+        }));
+      }
+    } catch (error) {
+      console.error(`Error fetching product ${productId}:`, error);
+    } finally {
+      setLoadingProducts((prev) => ({ ...prev, [productId]: false }));
+    }
+  };
+
+  // Function to fetch task settings
+  const fetchTaskSettings = async () => {
+    try {
+      const result = await getTaskSettingsById("task-settings");
+      if (result.data && result.data.settings) {
+        const settingsData = JSON.parse(result.data.settings);
+        setTaskSettings(settingsData);
+
+        // Fetch product details for all task requirements
+        (Object.values(settingsData) as TaskItem[]).forEach((task) => {
+          if (task.product_id && task.product_id !== "") {
+            fetchProductDetails(task.product_id);
+          }
+        });
+      } else {
+        console.error("No task settings found");
+      }
+    } catch (error) {
+      console.error("Error fetching task settings:", error);
+    }
+  };
+
+  // Function to fetch user orders
+  const fetchUserOrders = async () => {
+    try {
+      const result = await getUserOrders();
+      if (result.data) {
+        setUserOrders(result.data as unknown as Orders[]);
+      }
+      setOrdersFetched(true);
+    } catch (error) {
+      console.error("Error fetching user orders:", error);
+      setOrdersFetched(true);
+    }
+  };
+
+  // Function to check if user has completed a task requirement
+  const hasCompletedTaskRequirement = (taskKey: string): boolean => {
+    if (!taskSettings || !userOrders || !taskSettings[taskKey]) {
+      return false;
+    }
+
+    const taskRequirement = taskSettings[taskKey];
+    if (!taskRequirement.product_id || taskRequirement.product_id === "") {
+      return true;
+    }
+
+    const today = new Date();
+
+    return userOrders.some((order) => {
+      const orderDate = new Date(order.ordered_at);
+      const isToday =
+        orderDate.getDate() === today.getDate() &&
+        orderDate.getMonth() === today.getMonth() &&
+        orderDate.getFullYear() === today.getFullYear();
+
+      const matchesProduct = order.product_id === taskRequirement.product_id;
+      const matchesAmount =
+        !taskRequirement.amount ||
+        taskRequirement.amount === "" ||
+        Number(order.amount) >= Number(taskRequirement.amount);
+
+      return isToday && matchesProduct && matchesAmount;
+    });
+  };
+
+  // Enhanced function to fetch tasks - now also fetches task settings and orders
   const fetchTasks = async () => {
     setLoading(true);
     try {
       const result = await getUserTasks();
       if (result.data) {
         const taskData = result.data as unknown as Task[];
-        setTasks(taskData);
-        assignAnimationsToTasks(taskData);
+
+        const needsReset = taskData.some(isTaskResetNeeded);
+
+        if (needsReset) {
+          await updateTask(taskData[0].$id, { progress: taskData[0].progress });
+          const refreshResult = await getUserTasks();
+          if (refreshResult.data) {
+            setTasks(refreshResult.data as unknown as Task[]);
+            assignAnimationsToTasks(refreshResult.data as unknown as Task[]);
+          }
+        } else {
+          setTasks(taskData);
+          assignAnimationsToTasks(taskData);
+        }
+
+        if (!taskSettings) {
+          await fetchTaskSettings();
+        }
+
+        if (!ordersFetched) {
+          await fetchUserOrders();
+        }
       }
     } catch (error) {
       console.error("Error fetching tasks:", error);
@@ -127,7 +272,6 @@ export default function TaskCard() {
   useEffect(() => {
     fetchTasks();
 
-    // For confetti dimensions
     setConfettiWidth(window.innerWidth);
     setConfettiHeight(window.innerHeight);
 
@@ -142,17 +286,13 @@ export default function TaskCard() {
 
   const handleCompleteTask = async (taskId: string, taskKey: string) => {
     try {
-      // Get the current task
       const task = tasks.find((t) => t.$id === taskId);
       if (!task || !task.progress) return;
 
-      // Parse the progress JSON
       const progressData: ProgressData = JSON.parse(task.progress);
 
-      // Update the specific task to completed
       progressData[taskKey] = true;
 
-      // Immediately create a new local version of the tasks with the updated progress
       const updatedTasks = tasks.map((t) => {
         if (t.$id === taskId) {
           return { ...t, progress: JSON.stringify(progressData) };
@@ -160,19 +300,15 @@ export default function TaskCard() {
         return t;
       });
 
-      // Update state immediately before API call to improve UI responsiveness
       setTasks([...updatedTasks]);
 
-      // Save the updated progress
       const result = await updateTask(taskId, {
         progress: JSON.stringify(progressData),
       });
 
       if (result.data) {
-        // Refresh tasks from server after API call completes
         await fetchTasks();
 
-        // Show confetti if all tasks are completed
         const allCompleted = Object.values(progressData).every(
           (val) => val === true
         );
@@ -187,23 +323,77 @@ export default function TaskCard() {
   };
 
   const handleUnlockPremium = () => {
-    // Redirect to the contact page
     router.push("/contact");
   };
 
-  const openCompletionDialog = (taskId: string, taskKey: string) => {
-    // Get the animation for this task
+  const openCompletionDialog = async (taskId: string, taskKey: string) => {
+    const currentTask = tasks.find((t) => t.$id === taskId);
+    let resetStatus = "";
+
+    if (currentTask && currentTask.last_edit) {
+      const lastEdit = new Date(currentTask.last_edit);
+      const today = new Date();
+      const isToday =
+        lastEdit.getDate() === today.getDate() &&
+        lastEdit.getMonth() === today.getMonth() &&
+        lastEdit.getFullYear() === today.getFullYear();
+
+      if (isToday) {
+        const hoursSinceReset = Math.floor(
+          (today.getTime() - lastEdit.getTime()) / (1000 * 60 * 60)
+        );
+        if (hoursSinceReset < 24) {
+          resetStatus = `Tasks were reset ${hoursSinceReset} hour${
+            hoursSinceReset !== 1 ? "s" : ""
+          } ago.`;
+        }
+      }
+    }
+
+    if (!taskSettings) {
+      await fetchTaskSettings();
+    }
+
+    if (!ordersFetched) {
+      await fetchUserOrders();
+    }
+
+    const taskRequirements = taskSettings?.[taskKey] || null;
+    const isRequirementMet = hasCompletedTaskRequirement(taskKey);
+
+    // Fetch product details if not already loaded
+    if (
+      taskRequirements &&
+      taskRequirements.product_id &&
+      !productDetails[taskRequirements.product_id]
+    ) {
+      await fetchProductDetails(taskRequirements.product_id);
+    }
+
+    if (taskRequirements && !isRequirementMet && taskRequirements.product_id) {
+      const productName =
+        productDetails[taskRequirements.product_id]?.name ||
+        `Product ${taskRequirements.product_id}`;
+      const amountRequired = taskRequirements.amount
+        ? `${taskRequirements.amount} units of `
+        : "";
+
+      toast(
+        `You need to purchase ${amountRequired}${productName} today to complete this task.`
+      );
+
+      return;
+    }
+
     const animation =
       taskAnimationsRef.current.get(`${taskId}-${taskKey}`) ||
       getRandomAnimation();
 
-    // Start animation
     setActiveAnimation({
       component: animation,
       visible: true,
     });
 
-    // Clear any existing timers
     if (animationTimerRef.current) {
       clearTimeout(animationTimerRef.current);
     }
@@ -211,15 +401,16 @@ export default function TaskCard() {
       clearTimeout(dialogTimerRef.current);
     }
 
-    // After 5 seconds, stop the animation and show the dialog
     animationTimerRef.current = setTimeout(() => {
       setActiveAnimation((prev) => ({ ...prev, visible: false }));
 
-      // Open the dialog
       setCompletionDialog({
         open: true,
         taskId,
         taskKey,
+        resetStatus,
+        taskRequirements,
+        isRequirementMet,
       });
 
       animationTimerRef.current = null;
@@ -231,15 +422,14 @@ export default function TaskCard() {
       open: false,
       taskId: "",
       taskKey: "",
+      isRequirementMet: false,
     });
 
-    // Also ensure animation is stopped
     setActiveAnimation({
       component: null,
       visible: false,
     });
 
-    // Clear timers
     if (animationTimerRef.current) {
       clearTimeout(animationTimerRef.current);
       animationTimerRef.current = null;
@@ -249,11 +439,9 @@ export default function TaskCard() {
       dialogTimerRef.current = null;
     }
 
-    // Force refresh the task list to update availability
     setTasks([...tasks]);
   };
 
-  // Cleanup timers on unmount
   useEffect(() => {
     return () => {
       if (animationTimerRef.current) {
@@ -283,7 +471,6 @@ export default function TaskCard() {
   };
 
   const isTaskAvailable = (taskKey: string, progressData: ProgressData) => {
-    // If this is a paywall itself, it's always available
     if (taskKey.startsWith("paywall")) return true;
 
     const taskKeys = Object.keys(progressData).filter(
@@ -293,68 +480,49 @@ export default function TaskCard() {
       k.startsWith("paywall")
     );
 
-    // For regular tasks
     if (!taskKey.startsWith("paywall")) {
-      // Extract task number if possible
       const taskMatch = taskKey.match(/task(\d+)/);
       if (taskMatch) {
         const currentTaskNum = parseInt(taskMatch[1]);
 
-        // First task is always available
         if (currentTaskNum === 1) return true;
 
-        // Check if previous task is completed
         const prevTaskKey = `task${currentTaskNum - 1}`;
 
-        // If previous task exists and is completed, this task is available
         if (progressData[prevTaskKey] === true) return true;
-
-        // Otherwise check the standard way
       }
     }
 
-    // If we couldn't determine availability by task number, fall back to position-based logic
     const currentIndex = taskKeys.indexOf(taskKey);
 
-    // First task is always available
     if (currentIndex === 0) return true;
 
-    // For task2 and beyond, check if the previous task is completed
     if (currentIndex > 0) {
       const previousTask = taskKeys[currentIndex - 1];
       const previousTaskCompleted = progressData[previousTask] === true;
 
-      // If previous task is not completed, this task is not available
       if (!previousTaskCompleted) return false;
     }
 
-    // Check if any paywall is blocking this task
-    // Find all paywalls that should be completed before this task
     const requiredPaywalls = paywallKeys.filter((paywallKey) => {
-      // Extract the index number from the paywall key (if it exists)
       const paywallMatch = paywallKey.match(/paywall(\d+)/);
       const taskMatch = taskKey.match(/task(\d+)/);
 
       if (paywallMatch && taskMatch) {
         const paywallIndex = parseInt(paywallMatch[1]);
         const taskIndex = parseInt(taskMatch[1]);
-        // The paywall blocks this task if its index is lower than the task index
         return paywallIndex < taskIndex;
       }
 
-      // If we can't determine indexes, use the basic approach:
-      // A task after any paywall in the list requires that paywall to be completed
       const paywallPosition = Object.keys(progressData).indexOf(paywallKey);
       const taskPosition = Object.keys(progressData).indexOf(taskKey);
       return paywallPosition < taskPosition;
     });
 
-    // All required paywalls must be completed
     const allRequiredPaywallsCompleted =
       requiredPaywalls.length === 0 ||
       requiredPaywalls.every((paywall) => progressData[paywall] === true);
 
-    // Task is available if previous task is completed AND all required paywalls are completed
     return allRequiredPaywallsCompleted;
   };
 
@@ -364,7 +532,6 @@ export default function TaskCard() {
 
       const progressData: ProgressData = JSON.parse(task.progress);
 
-      // If animations haven't been assigned to these tasks yet, do it now
       if (!taskAnimationsRef.current.size) {
         Object.keys(progressData).forEach((key) => {
           taskAnimationsRef.current.set(
@@ -377,6 +544,27 @@ export default function TaskCard() {
       return Object.entries(progressData).map(([key, completed]) => {
         const isPaywall = key.startsWith("paywall");
         const available = isTaskAvailable(key, progressData);
+        const requirement = taskSettings?.[key];
+        const requirementMet = hasCompletedTaskRequirement(key);
+        const requirementExists =
+          requirement &&
+          requirement.product_id &&
+          requirement.product_id !== "";
+
+        // Get product details if requirement exists
+        let productName = "loading...";
+        let amountText = "";
+
+        if (requirementExists) {
+          const product = productDetails[requirement.product_id];
+          productName = product
+            ? product.name
+            : `Product ${requirement.product_id}`;
+
+          if (requirement.amount && requirement.amount !== "") {
+            amountText = `${requirement.amount} units of `;
+          }
+        }
 
         return (
           <div
@@ -386,6 +574,8 @@ export default function TaskCard() {
                 ? "bg-green-100 dark:bg-green-900/20"
                 : !available && !isPaywall
                 ? "bg-gray-100 dark:bg-gray-800"
+                : requirementExists && !requirementMet
+                ? "bg-amber-100 dark:bg-amber-900/20"
                 : "bg-muted/30"
             }`}
           >
@@ -428,17 +618,40 @@ export default function TaskCard() {
                       ? "Completed!"
                       : !available
                       ? "Complete previous tasks first"
+                      : requirementExists
+                      ? requirementMet
+                        ? "Requirements met! Click Complete"
+                        : `Purchase ${amountText}${productName} to complete`
                       : "Complete this task to continue"}
                   </p>
                 </div>
                 {!completed && available && (
-                  <Button
-                    size="sm"
-                    onClick={() => openCompletionDialog(task.$id, key)}
-                    className="ml-2 bg-gradient-to-r from-green-400 to-emerald-600 hover:from-green-500 hover:to-emerald-700 shadow-sm"
-                  >
-                    Complete
-                  </Button>
+                  <>
+                    {requirementExists && !requirementMet ? (
+                      <div className="flex items-center ml-2">
+                        <AlertCircle
+                          size={16}
+                          className="text-amber-500 mr-1"
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-amber-500 text-amber-600 bg-amber-50 dark:bg-amber-900/20"
+                          onClick={() => router.push(`/`)}
+                        >
+                          Buy Now
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={() => openCompletionDialog(task.$id, key)}
+                        className="ml-2 bg-gradient-to-r from-green-400 to-emerald-600 hover:from-green-500 hover:to-emerald-700 shadow-sm"
+                      >
+                        Complete
+                      </Button>
+                    )}
+                  </>
                 )}
                 {!completed && !available && !isPaywall && (
                   <LockIcon size={16} className="text-gray-400 ml-2" />
@@ -483,17 +696,14 @@ export default function TaskCard() {
         />
       )}
 
-      {/* Semi-transparent overlay when animation is active */}
       {activeAnimation.visible && (
         <div className="fixed inset-0 bg-gray-900/70 z-[90]" />
       )}
 
-      {/* Animation outside of dialog with z-index 100 */}
       {activeAnimation.visible && activeAnimation.component && (
         <div className="fixed inset-0 z-[100] pointer-events-none">
           <activeAnimation.component />
 
-          {/* Morphing text animation instead of card */}
           <div className="absolute inset-0 flex items-center justify-center">
             <motion.div
               className="text-center relative"
@@ -622,7 +832,7 @@ export default function TaskCard() {
               </DialogTitle>
               <DialogDescription>
                 You&apos;ve completed your task! Click the button below to
-                confirm and continue unlock next task.
+                confirm and continue to unlock the next task.
               </DialogDescription>
             </DialogHeader>
 
@@ -631,7 +841,27 @@ export default function TaskCard() {
                 <h3 className="text-lg font-semibold mb-2">
                   Great job on completing this step!
                 </h3>
-                <p className="text-sm mb-4">Continue to unlock more task.</p>
+                <p className="text-sm mb-4">Continue to unlock more tasks.</p>
+                {completionDialog.resetStatus && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 mb-3">
+                    {completionDialog.resetStatus}
+                  </p>
+                )}
+                {completionDialog.taskRequirements?.product_id &&
+                  completionDialog.isRequirementMet && (
+                    <p className="text-xs text-green-600 dark:text-green-400 mt-2 mb-3">
+                      {`Required purchase: ${
+                        completionDialog.taskRequirements.amount
+                          ? `${completionDialog.taskRequirements.amount} × `
+                          : ""
+                      }${
+                        productDetails[
+                          completionDialog.taskRequirements.product_id
+                        ]?.name ||
+                        `Product ${completionDialog.taskRequirements.product_id}`
+                      }`}
+                    </p>
+                  )}
                 <div className="w-full h-1 bg-gradient-to-r from-green-400 to-emerald-600 mt-2"></div>
               </div>
             </div>

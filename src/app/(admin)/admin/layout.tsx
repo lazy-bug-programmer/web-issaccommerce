@@ -15,10 +15,15 @@ export default function AdminLayout({
 
   const navItems = [
     { path: "/admin", label: "Dashboard" },
-    { path: "/admin/seller", label: "Seller" },
     { path: "/admin/referral_code", label: "Referral Code" },
-    { path: "/admin/withdrawal", label: "Withdrawal" },
-    { path: "/admin/shipment_automation", label: "Shipment Automation" },
+    { path: "/admin/seller", label: "Seller" },
+    { path: "/admin/seller_withdrawal", label: "Seller Withdrawal" },
+    {
+      path: "/admin/seller_shipment_automation",
+      label: "Seller Shipment Automation",
+    },
+    { path: "/admin/product", label: "Product" },
+    { path: "/admin/task_settings", label: "Task Settings" },
   ];
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);

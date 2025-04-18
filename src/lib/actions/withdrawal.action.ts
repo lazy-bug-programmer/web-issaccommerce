@@ -9,11 +9,15 @@ const DATABASE_ID = 'Core';
 const WITHDRAWALS_COLLECTION_ID = 'Withdrawal';
 
 // CREATE
-export async function createWithdrawal() {
+export async function createWithdrawal(amount: number = 0) {
     try {
         const user = await getLoggedInUser();
         if (!user) {
             return { error: "Not authorized" };
+        }
+
+        if (amount <= 0) {
+            return { error: "Withdrawal amount must be greater than zero" };
         }
 
         const { databases } = await createAdminClient();
@@ -24,6 +28,7 @@ export async function createWithdrawal() {
             "unique()",
             {
                 user_id: user.$id,
+                withdraw_amount: amount,
                 requested_at: new Date(),
                 status: 1 // Assuming 1 is the status for pending
             }

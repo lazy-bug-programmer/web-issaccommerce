@@ -11,8 +11,8 @@ export async function middleware(request: NextRequest) {
         // Skip auth check for login page and public routes
         if (request.nextUrl.pathname.startsWith('/login') ||
             request.nextUrl.pathname.startsWith('/signup') ||
+            request.nextUrl.pathname.startsWith('/contact') ||
             request.nextUrl.pathname.startsWith('/_next') ||
-            request.nextUrl.pathname.startsWith('/api') ||
             request.nextUrl.pathname.includes('.')) {
             return NextResponse.next()
         }

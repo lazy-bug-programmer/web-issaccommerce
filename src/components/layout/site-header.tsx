@@ -61,21 +61,6 @@ export function SiteHeader() {
           E-Commerce
         </Link>
 
-        <nav className="hidden md:flex items-center gap-6">
-          <Link
-            href="/"
-            className="text-sm font-medium transition-colors hover:text-primary"
-          >
-            Home
-          </Link>
-          <Link
-            href="/product"
-            className="text-sm font-medium transition-colors hover:text-primary"
-          >
-            Products
-          </Link>
-        </nav>
-
         <div className="flex items-center gap-2">
           {isLoggedIn ? (
             <DropdownMenu>

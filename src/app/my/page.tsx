@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getUserSales } from "@/lib/actions/sales.action";
+import { getUserSales, createSale } from "@/lib/actions/sales.action";
 import {
   createWithdrawal,
   getUserWithdrawals,
@@ -22,32 +22,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-// Define a type for the balance
-type Balance = {
-  $id: string;
-  user_id: string;
-  total_sales: number;
-  $createdAt: string;
-};
-
-// Define a type for withdrawal
-type Withdrawal = {
-  $id: string;
-  user_id: string;
-  requested_at: Date;
-  status: number;
-};
+import { Sale } from "@/lib/domains/sales.domain";
+import { Withdrawal } from "@/lib/domains/withdrawal.domain";
 
 export default function MyPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const [balance, setBalance] = useState<Balance | null>(null);
+  const [balance, setBalance] = useState<Sale | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [isDepositing, setIsDepositing] = useState(false);
   const [hasPendingWithdrawal, setHasPendingWithdrawal] = useState(false);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
+  const [isCreatingSales, setIsCreatingSales] = useState(false);
 
   // Profile update state
   const [name, setName] = useState("");
@@ -73,13 +60,58 @@ export default function MyPage() {
   async function fetchBalance() {
     setIsLoading(true);
     try {
+      // First, check if we already have a record or if we're currently creating one
+      if (isCreatingSales) {
+        return; // Exit early if a creation is already in progress
+      }
+
       const response = await getUserSales();
 
       if (response && response.data) {
         if (response.data.length > 0) {
-          setBalance(response.data[0] as unknown as Balance);
+          setBalance(response.data[0] as unknown as Sale);
         } else {
-          setBalance(null);
+          // No sales record found, create a new one
+          if (user && !isCreatingSales) {
+            setIsCreatingSales(true); // Set flag to prevent multiple creation attempts
+
+            const newSale: Sale = {
+              $id: "",
+              user_id: user.$id,
+              balance: 0,
+              number_of_rating: 0,
+              total_earning: 0,
+              trial_balance: null,
+            };
+
+            try {
+              const createResponse = await createSale(newSale);
+
+              if (createResponse.error) {
+                toast.error("Failed to create balance record");
+              } else {
+                toast.success("Balance record created successfully");
+                // Fetch balance again after creating
+                const refreshResponse = await getUserSales();
+                if (
+                  refreshResponse &&
+                  refreshResponse.data &&
+                  refreshResponse.data.length > 0
+                ) {
+                  setBalance(refreshResponse.data[0] as unknown as Sale);
+                } else {
+                  setBalance(null);
+                }
+              }
+            } catch (createError) {
+              console.error("Error creating sales record:", createError);
+              toast.error("Failed to create balance record");
+            } finally {
+              setIsCreatingSales(false); // Reset the flag regardless of outcome
+            }
+          } else {
+            setBalance(null);
+          }
         }
       } else {
         toast.error("Failed to fetch balance data");
@@ -190,7 +222,7 @@ export default function MyPage() {
       return;
     }
 
-    if (!balance || balance.total_sales <= 0) {
+    if (!balance || balance.balance <= 0) {
       toast.error("You have no funds to withdraw");
       return;
     }
@@ -203,7 +235,8 @@ export default function MyPage() {
 
     setIsWithdrawing(true);
     try {
-      const response = await createWithdrawal();
+      // Pass the current balance as the withdraw amount
+      const response = await createWithdrawal(balance.balance);
 
       if (response.error) {
         toast.error(response.error);
@@ -270,7 +303,7 @@ export default function MyPage() {
                   disabled={
                     isWithdrawing ||
                     !balance ||
-                    balance.total_sales <= 0 ||
+                    balance.balance <= 0 ||
                     hasPendingWithdrawal
                   }
                   title={
@@ -283,7 +316,7 @@ export default function MyPage() {
                 </Button>
               </div>
             </div>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">
@@ -292,13 +325,53 @@ export default function MyPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    ${balance?.total_sales.toFixed(2) || "0.00"}
+                    ${balance?.balance.toFixed(2) || "0.00"}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {balance
-                      ? `Last updated: ${formatDate(balance.$createdAt)}`
-                      : "No balance data available"}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    This is the amount available for withdrawal
                   </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">
+                    Total Earnings
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    ${balance?.total_earning.toFixed(2) || "0.00"}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">
+                    Trial Balance
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    $
+                    {balance?.trial_balance !== null
+                      ? balance?.trial_balance.toFixed(2)
+                      : "0.00"}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">
+                    Number of Ratings
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {balance?.number_of_rating || "0"}
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -324,7 +397,7 @@ export default function MyPage() {
                           {formatDate(withdrawal.requested_at)}
                         </TableCell>
                         <TableCell>
-                          ${balance?.total_sales.toFixed(2) || "N/A"}
+                          ${withdrawal.withdraw_amount.toFixed(2) || "0.00"}
                         </TableCell>
                         <TableCell>
                           {getStatusBadge(withdrawal.status)}

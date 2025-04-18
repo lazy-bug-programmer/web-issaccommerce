@@ -28,20 +28,20 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useParams, useRouter } from "next/navigation";
 import { createSale, getSales, updateSale } from "@/lib/actions/sales.action";
-
-// Define a type for the sale
-type Sale = {
-  $id: string;
-  user_id: string;
-  total_sales: number;
-  $createdAt: string;
-};
+import { Sale } from "@/lib/domains/sales.domain";
 
 // Create a schema for updating sales
 const updateFormSchema = z.object({
-  total_sales: z.coerce.number().nonnegative({
-    message: "Total sales must be a non-negative number",
+  balance: z.coerce.number().nonnegative({
+    message: "Balance must be a non-negative number",
   }),
+  number_of_rating: z.coerce.number().nonnegative({
+    message: "Number of ratings must be a non-negative number",
+  }),
+  total_earning: z.coerce.number().nonnegative({
+    message: "Total earnings must be a non-negative number",
+  }),
+  trial_balance: z.coerce.number().nonnegative().nullable(),
 });
 
 export default function SellerSalesPage() {
@@ -57,7 +57,10 @@ export default function SellerSalesPage() {
   const form = useForm<z.infer<typeof updateFormSchema>>({
     resolver: zodResolver(updateFormSchema),
     defaultValues: {
-      total_sales: 0,
+      balance: 0,
+      number_of_rating: 0,
+      total_earning: 0,
+      trial_balance: null,
     },
   });
 
@@ -99,7 +102,10 @@ export default function SellerSalesPage() {
 
       if (sale) {
         const response = await updateSale(sale.$id, {
-          total_sales: values.total_sales,
+          balance: values.balance,
+          number_of_rating: values.number_of_rating,
+          total_earning: values.total_earning,
+          trial_balance: values.trial_balance,
         });
 
         if (response.error) {
@@ -110,12 +116,19 @@ export default function SellerSalesPage() {
         toast.success("Sales data updated successfully");
         setSale({
           ...sale,
-          total_sales: values.total_sales,
+          balance: values.balance,
+          number_of_rating: values.number_of_rating,
+          total_earning: values.total_earning,
+          trial_balance: values.trial_balance,
         });
       } else {
         const response = await createSale({
+          $id: "",
           user_id: sellerId,
-          total_sales: values.total_sales,
+          balance: values.balance,
+          number_of_rating: values.number_of_rating,
+          total_earning: values.total_earning,
+          trial_balance: values.trial_balance,
         });
 
         if (response.error) {
@@ -138,18 +151,20 @@ export default function SellerSalesPage() {
   function handleEdit() {
     if (sale) {
       form.reset({
-        total_sales: sale.total_sales,
+        balance: sale.balance,
+        number_of_rating: sale.number_of_rating,
+        total_earning: sale.total_earning,
+        trial_balance: sale.trial_balance,
       });
     } else {
       form.reset({
-        total_sales: 0,
+        balance: 0,
+        number_of_rating: 0,
+        total_earning: 0,
+        trial_balance: null,
       });
     }
     setOpen(true);
-  }
-
-  function formatDate(dateString: string) {
-    return new Date(dateString).toLocaleDateString();
   }
 
   return (
@@ -167,6 +182,9 @@ export default function SellerSalesPage() {
             Seller Sales
           </h2>
         </div>
+        <Button onClick={handleEdit} className="gap-2">
+          <Edit className="h-4 w-4" /> Edit Sales Data
+        </Button>
       </div>
 
       {isLoading ? (
@@ -174,23 +192,57 @@ export default function SellerSalesPage() {
           <p>Loading sales data...</p>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
-              <Button variant="outline" size="icon" onClick={handleEdit}>
-                <Edit className="h-4 w-4" />
-              </Button>
+              <CardTitle className="text-sm font-medium">Balance</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                ${sale?.total_sales.toFixed(2) || "0.00"}
+                ${sale?.balance.toFixed(2) || "0.00"}
               </div>
-              <p className="text-xs text-muted-foreground">
-                {sale
-                  ? `Last updated: ${formatDate(sale.$createdAt)}`
-                  : "No sales data available"}
-              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Total Earnings
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                ${sale?.total_earning.toFixed(2) || "0.00"}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Trial Balance
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                $
+                {sale?.trial_balance !== null
+                  ? sale?.trial_balance.toFixed(2)
+                  : "0.00"}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Number of Ratings
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {sale?.number_of_rating || "0"}
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -213,10 +265,10 @@ export default function SellerSalesPage() {
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
-                name="total_sales"
+                name="balance"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Total Sales</FormLabel>
+                    <FormLabel>Balance</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
@@ -224,6 +276,65 @@ export default function SellerSalesPage() {
                         placeholder="0.00"
                         {...field}
                       />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="total_earning"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Total Earnings</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="trial_balance"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Trial Balance</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={field.value === null ? "" : field.value}
+                        onChange={(e) => {
+                          const value =
+                            e.target.value === ""
+                              ? null
+                              : parseFloat(e.target.value);
+                          field.onChange(value);
+                        }}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="number_of_rating"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Number of Ratings</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="0" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

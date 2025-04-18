@@ -23,7 +23,7 @@ import {
   adminUpdateWithdrawalStatus,
 } from "@/lib/actions/withdrawal.action";
 import { getUserById } from "@/lib/actions/auth.action";
-import { getSalesByUserId } from "@/lib/actions/sales.action";
+import { getSalesByUserId, updateSale } from "@/lib/actions/sales.action";
 import { toast } from "sonner";
 import { Check, X, UserRound, Loader2 } from "lucide-react";
 
@@ -34,6 +34,7 @@ type Withdrawal = {
   requested_at: string;
   status: number;
   amount?: number;
+  withdraw_amount?: number;
   $createdAt: string;
 };
 
@@ -49,7 +50,10 @@ type UserData = {
 type SalesData = {
   $id: string;
   user_id: string;
-  total_sales: number;
+  balance: number;
+  number_of_rating: number;
+  total_earning: number;
+  trial_balance: number | null;
 };
 
 export default function WithdrawalPage() {
@@ -195,12 +199,63 @@ export default function WithdrawalPage() {
   async function handleApprove(id: string) {
     setProcessingId(id);
     try {
+      // First update the withdrawal status
       const response = await adminUpdateWithdrawalStatus(id, 2);
       if (response.error) {
         toast.error(response.error);
         return;
       }
-      toast.success("Withdrawal approved successfully");
+
+      // Find the withdrawal in our list
+      const withdrawal = withdrawals.find((w) => w.$id === id);
+      if (!withdrawal) {
+        toast.error("Withdrawal record not found");
+        return;
+      }
+
+      // Get the user's sales data
+      const sales = salesCache[withdrawal.user_id];
+      if (!sales) {
+        toast.error("Sales record not found for this user");
+        return;
+      }
+
+      // Get the withdrawal amount (prefer withdraw_amount if available)
+      const withdrawalAmount =
+        withdrawal.withdraw_amount || withdrawal.amount || 0;
+
+      if (withdrawalAmount > 0) {
+        // Make sure we don't go negative with the balance
+        const newBalance = Math.max(0, sales.balance - withdrawalAmount);
+
+        // Update the user's balance by deducting the withdrawal amount
+        const updateResponse = await updateSale(sales.$id, {
+          balance: newBalance,
+        });
+
+        if (updateResponse.error) {
+          toast.error(
+            `Withdrawal approved but failed to update balance: ${updateResponse.error}`
+          );
+        } else {
+          toast.success(
+            `Withdrawal approved and balance updated: $${newBalance.toFixed(2)}`
+          );
+
+          // Update the sales cache
+          setSalesCache((prev) => ({
+            ...prev,
+            [withdrawal.user_id]: {
+              ...sales,
+              balance: newBalance,
+            },
+          }));
+        }
+      } else {
+        toast.warning("Approved withdrawal with zero amount");
+      }
+
+      // Refresh the withdrawal list
       fetchWithdrawals();
     } catch (error) {
       console.error("Error approving withdrawal:", error);
@@ -290,8 +345,9 @@ export default function WithdrawalPage() {
   }
 
   function getWithdrawalAmount(withdrawal: Withdrawal, userId: string) {
-    if (withdrawal.amount) {
-      return `$${withdrawal.amount.toFixed(2)}`;
+    if (withdrawal.amount || withdrawal.withdraw_amount) {
+      const amount = withdrawal.amount || withdrawal.withdraw_amount || 0;
+      return `$${amount.toFixed(2)}`;
     }
 
     if (loadingSales[userId]) {
@@ -303,8 +359,8 @@ export default function WithdrawalPage() {
       return "N/A";
     }
 
-    // Use total_sales as the withdrawal amount
-    return `$${sales.total_sales.toFixed(2)}`;
+    // Use balance as the withdrawal amount since we've updated the sales domain
+    return `$${sales.balance.toFixed(2)}`;
   }
 
   function handleSearch(e: React.FormEvent) {

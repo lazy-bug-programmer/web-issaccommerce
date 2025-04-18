@@ -18,14 +18,27 @@ export async function createSale(sale: Sale) {
 
         const { databases } = await createAdminClient();
 
+        // First, check if a sales record already exists for this user
+        const existingSales = await databases.listDocuments(
+            DATABASE_ID,
+            SALES_COLLECTION_ID,
+            [Query.equal("user_id", user.$id)]
+        );
+
+        // If a record already exists, return it instead of creating a new one
+        if (existingSales.documents.length > 0) {
+            return {
+                data: existingSales.documents[0],
+                message: "Sales record already exists"
+            };
+        }
+
+        // Only create if no record exists
         const newSale = await databases.createDocument(
             DATABASE_ID,
             SALES_COLLECTION_ID,
             "unique()",
-            {
-                user_id: sale.user_id,
-                total_sales: sale.total_sales,
-            }
+            sale
         );
 
         return { data: newSale };
