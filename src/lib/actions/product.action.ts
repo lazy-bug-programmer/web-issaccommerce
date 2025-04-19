@@ -228,17 +228,6 @@ export async function updateProduct(productId: string, updates: Partial<Product>
 
         const { databases } = await createAdminClient();
 
-        // First check if the product belongs to the user
-        const product = await databases.getDocument(
-            DATABASE_ID,
-            PRODUCTS_COLLECTION_ID,
-            productId
-        );
-
-        if (product.user_id !== user.$id) {
-            return { error: "Not authorized to update this product" };
-        }
-
         const updatedProduct = await databases.updateDocument(
             DATABASE_ID,
             PRODUCTS_COLLECTION_ID,
@@ -262,17 +251,6 @@ export async function deleteProduct(productId: string) {
         }
 
         const { databases } = await createAdminClient();
-
-        // First check if the product belongs to the user
-        const product = await databases.getDocument(
-            DATABASE_ID,
-            PRODUCTS_COLLECTION_ID,
-            productId
-        );
-
-        if (product.user_id !== user.$id) {
-            return { error: "Not authorized to delete this product" };
-        }
 
         await databases.deleteDocument(
             DATABASE_ID,
