@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use server";
 
@@ -33,12 +34,15 @@ export async function createSale(sale: Sale) {
             };
         }
 
+        // Remove $id if it exists in the sale object
+        const { $id, ...saleWithoutId } = sale;
+
         // Only create if no record exists
         const newSale = await databases.createDocument(
             DATABASE_ID,
             SALES_COLLECTION_ID,
             "unique()",
-            sale
+            saleWithoutId
         );
 
         return { data: newSale };
