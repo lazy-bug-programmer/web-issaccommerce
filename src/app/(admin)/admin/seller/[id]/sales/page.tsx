@@ -219,9 +219,7 @@ export default function SellerSalesPage() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Trial Balance
-              </CardTitle>
+              <CardTitle className="text-sm font-medium">Trial Bonus</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
@@ -306,7 +304,7 @@ export default function SellerSalesPage() {
                 name="trial_balance"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Trial Balance</FormLabel>
+                    <FormLabel>Trial Bonus</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
