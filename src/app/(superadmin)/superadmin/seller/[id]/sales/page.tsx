@@ -41,7 +41,10 @@ const updateFormSchema = z.object({
   total_earning: z.coerce.number().nonnegative({
     message: "Total earnings must be a non-negative number",
   }),
-  trial_balance: z.coerce.number().nonnegative().nullable(),
+  trial_bonus: z.coerce.number().nonnegative().nullable(),
+  trial_bonus_date: z.string().nullable(),
+  today_bonus: z.coerce.number().nonnegative().nullable(),
+  today_bonus_date: z.string().nullable(),
 });
 
 export default function SellerSalesPage() {
@@ -60,7 +63,10 @@ export default function SellerSalesPage() {
       balance: 0,
       number_of_rating: 0,
       total_earning: 0,
-      trial_balance: null,
+      trial_bonus: null,
+      trial_bonus_date: null,
+      today_bonus: null,
+      today_bonus_date: null,
     },
   });
 
@@ -105,7 +111,14 @@ export default function SellerSalesPage() {
           balance: values.balance,
           number_of_rating: values.number_of_rating,
           total_earning: values.total_earning,
-          trial_balance: values.trial_balance,
+          trial_bonus: values.trial_bonus ?? undefined,
+          trial_bonus_date: values.trial_bonus_date
+            ? new Date(values.trial_bonus_date)
+            : undefined,
+          today_bonus: values.today_bonus ?? undefined,
+          today_bonus_date: values.today_bonus_date
+            ? new Date(values.today_bonus_date)
+            : undefined,
         });
 
         if (response.error) {
@@ -119,7 +132,14 @@ export default function SellerSalesPage() {
           balance: values.balance,
           number_of_rating: values.number_of_rating,
           total_earning: values.total_earning,
-          trial_balance: values.trial_balance,
+          trial_bonus: values.trial_bonus ?? 0,
+          trial_bonus_date: values.trial_bonus_date
+            ? new Date(values.trial_bonus_date)
+            : new Date(),
+          today_bonus: values.today_bonus ?? 0,
+          today_bonus_date: values.today_bonus_date
+            ? new Date(values.today_bonus_date)
+            : new Date(),
         });
       } else {
         const response = await createSale({
@@ -128,7 +148,14 @@ export default function SellerSalesPage() {
           balance: values.balance,
           number_of_rating: values.number_of_rating,
           total_earning: values.total_earning,
-          trial_balance: values.trial_balance,
+          trial_bonus: values.trial_bonus ?? 0,
+          trial_bonus_date: values.trial_bonus_date
+            ? new Date(values.trial_bonus_date)
+            : new Date(),
+          today_bonus: values.today_bonus ?? 0,
+          today_bonus_date: values.today_bonus_date
+            ? new Date(values.today_bonus_date)
+            : new Date(),
         });
 
         if (response.error) {
@@ -154,14 +181,24 @@ export default function SellerSalesPage() {
         balance: sale.balance,
         number_of_rating: sale.number_of_rating,
         total_earning: sale.total_earning,
-        trial_balance: sale.trial_balance,
+        trial_bonus: sale.trial_bonus,
+        trial_bonus_date: sale.trial_bonus_date
+          ? sale.trial_bonus_date.toISOString().split("T")[0]
+          : null,
+        today_bonus: sale.today_bonus,
+        today_bonus_date: sale.today_bonus_date
+          ? sale.today_bonus_date.toISOString().split("T")[0]
+          : null,
       });
     } else {
       form.reset({
         balance: 0,
         number_of_rating: 0,
         total_earning: 0,
-        trial_balance: null,
+        trial_bonus: null,
+        trial_bonus_date: null,
+        today_bonus: null,
+        today_bonus_date: null,
       });
     }
     setOpen(true);
@@ -174,7 +211,7 @@ export default function SellerSalesPage() {
           <Button
             variant="outline"
             size="icon"
-            onClick={() => router.push("/admin/seller")}
+            onClick={() => router.push("/superadmin/seller")}
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
@@ -224,10 +261,15 @@ export default function SellerSalesPage() {
             <CardContent>
               <div className="text-2xl font-bold">
                 $
-                {sale?.trial_balance !== null
-                  ? sale?.trial_balance.toFixed(2)
+                {sale?.trial_bonus !== null
+                  ? sale?.trial_bonus.toFixed(2)
                   : "0.00"}
               </div>
+              {sale?.trial_bonus_date && (
+                <div className="text-xs text-muted-foreground mt-1">
+                  Date: {new Date(sale.trial_bonus_date).toLocaleDateString()}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -241,6 +283,27 @@ export default function SellerSalesPage() {
               <div className="text-2xl font-bold">
                 {sale?.number_of_rating || "0"}
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Today&apos;s Bonus
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                $
+                {sale?.today_bonus !== null
+                  ? sale?.today_bonus.toFixed(2)
+                  : "0.00"}
+              </div>
+              {sale?.today_bonus_date && (
+                <div className="text-xs text-muted-foreground mt-1">
+                  Date: {new Date(sale.today_bonus_date).toLocaleDateString()}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -301,7 +364,7 @@ export default function SellerSalesPage() {
 
               <FormField
                 control={form.control}
-                name="trial_balance"
+                name="trial_bonus"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Trial Bonus</FormLabel>
@@ -317,6 +380,72 @@ export default function SellerSalesPage() {
                               ? null
                               : parseFloat(e.target.value);
                           field.onChange(value);
+                        }}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="trial_bonus_date"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Trial Bonus Date</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="date"
+                        value={field.value || ""}
+                        onChange={(e) => {
+                          field.onChange(e.target.value || null);
+                        }}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="today_bonus"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Today&apos;s Bonus</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={field.value === null ? "" : field.value}
+                        onChange={(e) => {
+                          const value =
+                            e.target.value === ""
+                              ? null
+                              : parseFloat(e.target.value);
+                          field.onChange(value);
+                        }}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="today_bonus_date"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Today&apos;s Bonus Date</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="date"
+                        value={field.value || ""}
+                        onChange={(e) => {
+                          field.onChange(e.target.value || null);
                         }}
                       />
                     </FormControl>

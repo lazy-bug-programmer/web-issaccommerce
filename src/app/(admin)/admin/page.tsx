@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
-import { Users, Truck, DollarSign, Gift } from "lucide-react";
+import { Gift } from "lucide-react";
 
 export default function AdminDashboard() {
   return (
@@ -12,23 +12,6 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-        <Link href="/admin/seller" className="block h-full">
-          <Card className="h-full transition-all hover:shadow-md hover:border-primary/50">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xl font-semibold">
-                Seller Management
-              </CardTitle>
-              <Users className="h-6 w-6 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                Manage seller accounts, view seller statistics, and handle
-                seller-related operations.
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-
         <Link href="/admin/referral_code" className="block h-full">
           <Card className="h-full transition-all hover:shadow-md hover:border-primary/50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -41,39 +24,6 @@ export default function AdminDashboard() {
               <p className="text-muted-foreground">
                 Create and manage referral codes, track conversions, and analyze
                 referral program performance.
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/admin/withdrawal" className="block h-full">
-          <Card className="h-full transition-all hover:shadow-md hover:border-primary/50">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xl font-semibold">
-                Withdrawal Management
-              </CardTitle>
-              <DollarSign className="h-6 w-6 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                Manage withdrawal requests.
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/admin/shipment_automation" className="block h-full">
-          <Card className="h-full transition-all hover:shadow-md hover:border-primary/50">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xl font-semibold">
-                Shipment Automation
-              </CardTitle>
-              <Truck className="h-6 w-6 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                Set up and manage automated shipments, delivery workflows, and
-                tracking operations.
               </p>
             </CardContent>
           </Card>

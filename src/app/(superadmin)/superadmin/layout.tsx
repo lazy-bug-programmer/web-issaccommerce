@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 
-export default function SellerLayout({
+export default function AdminLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
@@ -14,9 +14,12 @@ export default function SellerLayout({
   const pathname = usePathname();
 
   const navItems = [
-    { path: "/seller", label: "Dashboard" },
-    { path: "/seller/product", label: "Product" },
-    { path: "/seller/shipment", label: "Shipment" },
+    { path: "/superadmin", label: "Dashboard" },
+    { path: "/superadmin/referral_code", label: "Referral Code" },
+    { path: "/superadmin/seller", label: "Seller" },
+    { path: "/superadmin/seller_withdrawal", label: "Seller Withdrawal" },
+    { path: "/superadmin/product", label: "Product" },
+    { path: "/superadmin/task_settings", label: "Task Settings" },
   ];
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
@@ -39,7 +42,7 @@ export default function SellerLayout({
         } lg:static lg:translate-x-0`}
       >
         <div className="p-6 flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-800">Seller</h2>
+          <h2 className="text-2xl font-bold text-gray-800">Admin</h2>
           {/* Close button inside sidebar for mobile */}
           <button
             onClick={toggleSidebar}

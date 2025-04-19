@@ -67,7 +67,7 @@ const formSchema = z.object({
   description: z.string().min(10, {
     message: "Description must be at least 10 characters",
   }),
-  image_url: z.string().or(z.literal("")),
+  image_urls: z.array(z.string()),
   price: z.coerce.number().positive({
     message: "Price must be a positive number",
   }),
@@ -92,15 +92,15 @@ export default function ProductsPage() {
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string[]>([]);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [productImages, setProductImages] = useState<Record<string, string>>(
     {}
   );
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
-  const [keyword, setKeyword] = useState(""); // Add keyword state for search
+  const [keyword, setKeyword] = useState("");
   const limit = 10;
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -108,7 +108,7 @@ export default function ProductsPage() {
     defaultValues: {
       name: "",
       description: "",
-      image_url: "",
+      image_urls: [],
       price: 0,
       quantity: 0,
       discount_rate: 0,
@@ -117,20 +117,19 @@ export default function ProductsPage() {
 
   useEffect(() => {
     fetchProducts();
-  }, [page]); // Don't add keyword here; we'll let the search button trigger fetch
+  }, [page]);
 
-  // Load images when products change
   useEffect(() => {
     products.forEach((product) => {
-      if (
-        product.image_url &&
-        !product.image_url.startsWith("http") &&
-        !productImages[product.image_url]
-      ) {
-        fetchProductImage(product.image_url);
+      if (product.image_urls && product.image_urls.length > 0) {
+        product.image_urls.forEach((imageUrl) => {
+          if (!imageUrl.startsWith("http") && !productImages[imageUrl]) {
+            fetchProductImage(imageUrl);
+          }
+        });
       }
     });
-  }, [products]);
+  }, [products, productImages]);
 
   async function fetchProductImage(imageId: string) {
     try {
@@ -141,7 +140,6 @@ export default function ProductsPage() {
       }
 
       if (response.data?.file) {
-        // Convert blob to object URL
         const blob = new Blob([response.data.file]);
         const url = URL.createObjectURL(blob);
 
@@ -158,7 +156,6 @@ export default function ProductsPage() {
   async function fetchProducts() {
     setIsLoading(true);
     try {
-      // Use offset pagination
       const offset = (page - 1) * limit;
       const response = await getProducts(limit, offset, keyword);
 
@@ -172,8 +169,6 @@ export default function ProductsPage() {
           (doc) => doc as unknown as Product
         );
         setProducts(productData);
-
-        // Use the total from the response for pagination
         setTotalPages(Math.ceil((response.total || 0) / limit));
       }
     } catch {
@@ -183,10 +178,9 @@ export default function ProductsPage() {
     }
   }
 
-  // Add search handler
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
-    setPage(1); // Reset to first page when searching
+    setPage(1);
     fetchProducts();
   }
 
@@ -195,12 +189,10 @@ export default function ProductsPage() {
       setIsSubmitting(true);
 
       if (isEditing && currentProduct) {
-        // Update existing product
         const updatedValues = { ...values };
 
-        // If there's no new image file, keep the existing image URL
-        if (!imageFile && currentProduct.image_url) {
-          updatedValues.image_url = currentProduct.image_url;
+        if (imageFiles.length === 0 && currentProduct.image_urls) {
+          updatedValues.image_urls = currentProduct.image_urls;
         }
 
         const response = await updateProduct(currentProduct.$id, updatedValues);
@@ -210,33 +202,30 @@ export default function ProductsPage() {
         }
         toast.success("Product updated successfully");
       } else {
-        // Add new product with image
-        if (imageFile) {
-          // Since we removed the image URL field, set it to empty
-          const newValues = { ...values, image_url: "" };
-          const response = await createProductWithImage(newValues, imageFile);
+        if (imageFiles.length > 0) {
+          const productData = { ...values };
+          const response = await createProductWithImage(
+            productData,
+            imageFiles
+          );
           if (response.error) {
             toast.error(response.error);
             return;
           }
           toast.success("Product added successfully");
         } else {
-          // Show error if no image was uploaded
-          toast.error("Please upload a product image");
+          toast.error("Please upload at least one product image");
           return;
         }
       }
 
-      // Refresh the products list
       fetchProducts();
-
-      // Close form and reset state
       setOpen(false);
       form.reset();
       setIsEditing(false);
       setCurrentProduct(null);
-      setImagePreview(null);
-      setImageFile(null);
+      setImagePreview([]);
+      setImageFiles([]);
     } catch {
       toast.error("An error occurred while saving the product");
     } finally {
@@ -250,18 +239,23 @@ export default function ProductsPage() {
     form.reset({
       name: product.name,
       description: product.description,
-      image_url: product.image_url,
+      image_urls: product.image_urls || [],
       price: product.price,
       quantity: product.quantity,
       discount_rate: product.discount_rate,
     });
 
-    // Set image preview based on source
-    if (product.image_url.startsWith("http")) {
-      setImagePreview(product.image_url);
-    } else if (productImages[product.image_url]) {
-      setImagePreview(productImages[product.image_url]);
+    const previews: string[] = [];
+    if (product.image_urls && product.image_urls.length > 0) {
+      product.image_urls.forEach((url) => {
+        if (url.startsWith("http")) {
+          previews.push(url);
+        } else if (productImages[url]) {
+          previews.push(productImages[url]);
+        }
+      });
     }
+    setImagePreview(previews);
 
     setOpen(true);
   }
@@ -296,54 +290,88 @@ export default function ProductsPage() {
     form.reset({
       name: "",
       description: "",
-      image_url: "",
+      image_urls: [],
       price: 0,
       quantity: 0,
       discount_rate: 0,
     });
-    setImagePreview(null);
-    setImageFile(null);
+    setImagePreview([]);
+    setImageFiles([]);
     setOpen(true);
   }
 
   function handleImageChange(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please upload an image file");
-      return;
-    }
+    const newFiles: File[] = [];
+    const newPreviews: string[] = [...imagePreview];
 
-    setImageFile(file);
+    Array.from(files).forEach((file) => {
+      if (!file.type.startsWith("image/")) {
+        toast.error(`File "${file.name}" is not an image`);
+        return;
+      }
 
-    // Create preview
-    const reader = new FileReader();
-    reader.onload = () => {
-      setImagePreview(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+      newFiles.push(file);
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        newPreviews.push(reader.result as string);
+        setImagePreview([...newPreviews]);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    setImageFiles([...imageFiles, ...newFiles]);
   }
 
-  // Calculate final price after discount
+  function removeImage(index: number) {
+    const newPreviews = [...imagePreview];
+    newPreviews.splice(index, 1);
+    setImagePreview(newPreviews);
+
+    if (
+      isEditing &&
+      currentProduct &&
+      index < (currentProduct.image_urls?.length || 0)
+    ) {
+      const currentUrls = form.getValues("image_urls");
+      currentUrls.splice(index, 1);
+      form.setValue("image_urls", currentUrls);
+    } else {
+      const newIndex =
+        isEditing && currentProduct
+          ? index - (currentProduct.image_urls?.length || 0)
+          : index;
+      if (newIndex >= 0) {
+        const newFiles = [...imageFiles];
+        newFiles.splice(newIndex, 1);
+        setImageFiles(newFiles);
+      }
+    }
+  }
+
   const calculateFinalPrice = (price: number, discountRate: number): string => {
     const finalPrice = price * (1 - discountRate / 100);
     return finalPrice.toFixed(2);
   };
 
-  // Function to get the correct image source
-  const getImageSource = (product: Product) => {
-    // If it's a URL, use it directly
-    if (product.image_url.startsWith("http")) {
-      return product.image_url;
+  const getMainImageSource = (product: Product) => {
+    if (!product.image_urls || product.image_urls.length === 0) {
+      return "/100x100.svg";
     }
 
-    // If we have the image in our cache, use it
-    if (productImages[product.image_url]) {
-      return productImages[product.image_url];
+    const firstImage = product.image_urls[0];
+
+    if (firstImage.startsWith("http")) {
+      return firstImage;
     }
 
-    // Otherwise use placeholder
+    if (productImages[firstImage]) {
+      return productImages[firstImage];
+    }
+
     return "/100x100.svg";
   };
 
@@ -406,35 +434,44 @@ export default function ProductsPage() {
                   )}
                 />
 
-                {/* Image Upload Section */}
                 <div className="space-y-3">
-                  <FormLabel>Product Image</FormLabel>
+                  <FormLabel>Product Images</FormLabel>
 
-                  {/* Image Preview */}
-                  {imagePreview && (
-                    <div className="w-full flex justify-center mb-3">
-                      <img
-                        src={imagePreview}
-                        alt="Preview"
-                        className="h-40 w-40 object-cover rounded-md border"
-                      />
-                    </div>
-                  )}
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {imagePreview.map((src, index) => (
+                      <div key={index} className="relative">
+                        <img
+                          src={src}
+                          alt={`Preview ${index + 1}`}
+                          className="h-20 w-20 object-cover rounded-md border"
+                        />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="icon"
+                          className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+                          onClick={() => removeImage(index)}
+                        >
+                          <Trash className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
 
-                  {/* Image Upload Button */}
                   <div className="flex items-center">
                     <label
                       htmlFor="image-upload"
                       className="cursor-pointer flex items-center justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium bg-white hover:bg-gray-50 w-full"
                     >
                       <Upload className="h-4 w-4 mr-2" />
-                      {imagePreview ? "Change Image" : "Upload Image"}
+                      Upload Images
                       <input
                         id="image-upload"
                         type="file"
                         accept="image/*"
                         className="hidden"
                         onChange={handleImageChange}
+                        multiple
                       />
                     </label>
                   </div>
@@ -507,7 +544,6 @@ export default function ProductsPage() {
         </Dialog>
       </div>
 
-      {/* Add search bar */}
       <div className="flex items-center gap-2">
         <form
           onSubmit={handleSearch}
@@ -557,7 +593,7 @@ export default function ProductsPage() {
                     <TableRow key={product.$id}>
                       <TableCell>
                         <img
-                          src={getImageSource(product)}
+                          src={getMainImageSource(product)}
                           alt={product.name}
                           className="h-10 w-10 rounded-md object-cover"
                         />

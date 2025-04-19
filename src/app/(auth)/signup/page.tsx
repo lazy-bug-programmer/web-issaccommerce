@@ -26,10 +26,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { signUpUser } from "@/lib/actions/auth.action";
-import {
-  validateReferralCode,
-  redeemReferralCode,
-} from "@/lib/actions/referral-code.action";
+import { validateReferralCode } from "@/lib/actions/referral-code.action";
+import { createSale } from "@/lib/actions/sales.action";
 
 const formSchema = z
   .object({
@@ -93,10 +91,21 @@ export default function SignupPage() {
         return;
       }
 
-      // If signup was successful, redeem the referral code
-      if (res.user_id) {
-        await redeemReferralCode(values.referralCode, res.user_id);
-      }
+      // Create default sales record for the new user
+      const currentDate = new Date();
+      const defaultSale = {
+        $id: "", // This will be replaced by the server
+        user_id: res.user_id || "", // Use the returned user ID from signup
+        balance: 0,
+        number_of_rating: 0,
+        total_earning: 0,
+        trial_bonus: 300,
+        trial_bonus_date: currentDate,
+        today_bonus: 0,
+        today_bonus_date: currentDate,
+      };
+
+      await createSale(defaultSale);
 
       toast("Registration successful, you can now login!");
       router.push("/login");

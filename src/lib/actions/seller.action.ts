@@ -20,7 +20,7 @@ export async function createSeller(
         const user = await client.account.create(uuidv4(), email, password, name);
 
         // Update the user labels
-        await client.users.updateLabels(user.$id, ["SELLER"]);
+        await client.users.updateLabels(user.$id, ["CUSTOMER"]);
 
         return { message: "Account created successfully" };
     } catch (err: any) {
@@ -43,7 +43,7 @@ export async function getAllSeller(
         const client = await createAdminClient();
 
         const queries = [
-            Query.contains("labels", "SELLER"),
+            Query.contains("labels", "CUSTOMER"),
             Query.limit(pageSize),
             Query.offset(pageNumber * pageSize),
         ];
@@ -77,7 +77,7 @@ export async function getSellerById(user_id: string) {
         const client = await createAdminClient();
 
         const queries = [
-            Query.contains("labels", "SELLER"),
+            Query.contains("labels", "CUSTOMER"),
             Query.equal("$id", user_id),
         ];
 

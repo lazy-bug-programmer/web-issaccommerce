@@ -26,7 +26,12 @@ import { getUserSales, updateSale } from "@/lib/actions/sales.action";
 import { createOrder } from "@/lib/actions/orders.action";
 import { Product } from "@/lib/domains/products.domain";
 import { Sale } from "@/lib/domains/sales.domain";
-import { ShoppingBag, AlertCircle } from "lucide-react";
+import {
+  ShoppingBag,
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { toast } from "sonner";
 
 // Image component that handles loading the image
@@ -106,6 +111,88 @@ function ProductImage({
       alt={productName}
       className="h-full w-full object-cover"
     />
+  );
+}
+
+// Carousel component for displaying multiple product images
+function ProductImageCarousel({
+  imageUrls,
+  productName,
+}: {
+  imageUrls: string[];
+  productName: string;
+}) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  const goToPrevious = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCurrentIndex((prevIndex) =>
+      prevIndex === 0 ? imageUrls.length - 1 : prevIndex - 1
+    );
+  };
+
+  const goToNext = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCurrentIndex((prevIndex) =>
+      prevIndex === imageUrls.length - 1 ? 0 : prevIndex + 1
+    );
+  };
+
+  // If no images, show placeholder
+  if (!imageUrls || imageUrls.length === 0) {
+    return (
+      <div className="aspect-square w-full bg-gray-100 flex items-center justify-center">
+        <span className="text-gray-400">No images</span>
+      </div>
+    );
+  }
+
+  // If only one image, don't need navigation
+  if (imageUrls.length === 1) {
+    return <ProductImage imageId={imageUrls[0]} productName={productName} />;
+  }
+
+  return (
+    <div className="relative aspect-square w-full overflow-hidden">
+      <div className="h-full w-full">
+        <ProductImage
+          imageId={imageUrls[currentIndex]}
+          productName={productName}
+        />
+      </div>
+
+      {/* Navigation arrows */}
+      <div className="absolute inset-0 flex items-center justify-between p-2">
+        <Button
+          variant="secondary"
+          size="icon"
+          className="h-8 w-8 rounded-full bg-white/70 shadow hover:bg-white/90"
+          onClick={goToPrevious}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="secondary"
+          size="icon"
+          className="h-8 w-8 rounded-full bg-white/70 shadow hover:bg-white/90"
+          onClick={goToNext}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {/* Indicators */}
+      <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1">
+        {imageUrls.map((_, index) => (
+          <div
+            key={index}
+            className={`h-1.5 w-1.5 rounded-full ${
+              index === currentIndex ? "bg-white" : "bg-white/50"
+            }`}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -191,11 +278,20 @@ export default function ProductDisplay({ products }: { products: Product[] }) {
       );
       const totalCost = finalPrice * quantity;
 
-      const trialBalance = userSale.trial_balance || 0;
-      const regularBalance = userSale.balance || 0;
+      // Check if trial_bonus_date is today
+      const today = new Date().toDateString();
+      const isTrialBonusToday = userSale.trial_bonus_date
+        ? new Date(userSale.trial_bonus_date).toDateString() === today
+        : false;
 
-      if (trialBalance + regularBalance < totalCost) {
-        setErrorMessage("Insufficient balance to complete this purchase");
+      // Calculate available money based on trial bonus date
+      const totalMoney = isTrialBonusToday
+        ? (userSale.trial_bonus || 0) + (userSale.balance || 0)
+        : userSale.balance || 0;
+
+      // Check if user has enough money
+      if (totalMoney < totalCost) {
+        setErrorMessage("Insufficient balance. Please topup via Profile");
         setIsProcessing(false);
         return;
       }
@@ -209,28 +305,24 @@ export default function ProductDisplay({ products }: { products: Product[] }) {
         throw new Error("Failed to update product quantity");
       }
 
-      // 2. Update user's balance
-      let updatedTrialBalance = trialBalance;
-      let updatedRegularBalance = regularBalance;
+      // 2. Calculate cashback (3% of total cost)
+      const cashbackAmount = totalCost * 0.03;
 
-      if (trialBalance >= totalCost) {
-        updatedTrialBalance = trialBalance - totalCost;
-      } else {
-        const remainingCost = totalCost - trialBalance;
-        updatedTrialBalance = 0;
-        updatedRegularBalance = regularBalance - remainingCost;
-      }
+      // 3. Update user's balance and stats
+      const updateData: Partial<Sale> = {
+        balance: (userSale.balance || 0) + cashbackAmount,
+        today_bonus: (userSale.today_bonus || 0) + cashbackAmount,
+        today_bonus_date: new Date(),
+        total_earning: (userSale.total_earning || 0) + cashbackAmount,
+      };
 
-      const updatedSale = await updateSale(userSale.$id, {
-        trial_balance: updatedTrialBalance,
-        balance: updatedRegularBalance,
-      });
+      const updatedSale = await updateSale(userSale.$id, updateData);
 
       if (!updatedSale.data) {
         throw new Error("Failed to update user balance");
       }
 
-      // 3. Create an order record
+      // 4. Create an order record
       const orderResult = await createOrder({
         product_id: product.$id,
         amount: quantity,
@@ -252,12 +344,15 @@ export default function ProductDisplay({ products }: { products: Product[] }) {
 
       setUserSale({
         ...userSale,
-        trial_balance: updatedTrialBalance,
-        balance: updatedRegularBalance,
+        ...updateData,
       });
 
       setPurchaseDialog({ open: false, product: null, quantity: 1 });
-      toast.success(`Successfully purchased ${quantity} ${product.name}`);
+      toast.success(
+        `Successfully purchased ${quantity} ${
+          product.name
+        }! Earned ${cashbackAmount.toFixed(2)} cashback.`
+      );
     } catch (error) {
       console.error("Error processing purchase:", error);
       setErrorMessage("Failed to process purchase. Please try again.");
@@ -283,9 +378,9 @@ export default function ProductDisplay({ products }: { products: Product[] }) {
             className="overflow-hidden flex flex-col h-full"
           >
             <div className="aspect-square w-full">
-              {product.image_url ? (
-                <ProductImage
-                  imageId={product.image_url}
+              {product.image_urls && product.image_urls.length > 0 ? (
+                <ProductImageCarousel
+                  imageUrls={product.image_urls}
                   productName={product.name}
                 />
               ) : (
@@ -415,13 +510,21 @@ export default function ProductDisplay({ products }: { products: Product[] }) {
             <div className="text-sm space-y-1">
               <p className="font-medium">Your Balance:</p>
               <div className="flex flex-col text-muted-foreground">
-                <span>Trial: ${(userSale?.trial_balance || 0).toFixed(2)}</span>
+                {userSale?.trial_bonus_date &&
+                new Date(userSale.trial_bonus_date).toDateString() ===
+                  new Date().toDateString() ? (
+                  <span>Trial: ${(userSale?.trial_bonus || 0).toFixed(2)}</span>
+                ) : null}
                 <span>Regular: ${(userSale?.balance || 0).toFixed(2)}</span>
                 <span className="border-t pt-1 font-medium text-foreground">
                   Total: $
-                  {(
-                    (userSale?.balance || 0) + (userSale?.trial_balance || 0)
-                  ).toFixed(2)}
+                  {userSale?.trial_bonus_date &&
+                  new Date(userSale.trial_bonus_date).toDateString() ===
+                    new Date().toDateString()
+                    ? (
+                        (userSale?.balance || 0) + (userSale?.trial_bonus || 0)
+                      ).toFixed(2)
+                    : (userSale?.balance || 0).toFixed(2)}
                 </span>
               </div>
             </div>

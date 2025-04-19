@@ -4,7 +4,11 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getUserSales, createSale } from "@/lib/actions/sales.action";
+import {
+  getUserSales,
+  createSale,
+  updateSale,
+} from "@/lib/actions/sales.action";
 import {
   createWithdrawal,
   getUserWithdrawals,
@@ -69,19 +73,56 @@ export default function MyPage() {
 
       if (response && response.data) {
         if (response.data.length > 0) {
-          setBalance(response.data[0] as unknown as Sale);
+          const salesData = response.data[0] as unknown as Sale;
+
+          // Check if today_bonus_date is not today, if so reset it
+          if (
+            salesData.today_bonus_date &&
+            !isToday(salesData.today_bonus_date)
+          ) {
+            // Reset only today's bonus if date is not today
+            try {
+              // Important: Only include the specific fields we want to update
+              // This ensures other fields like balance, total_earning, etc. aren't affected
+              const updateResult = await updateSale(salesData.$id, {
+                today_bonus: 0,
+                today_bonus_date: new Date(),
+              });
+
+              if (updateResult.data) {
+                // Preserve all other fields from the original data
+                const updatedSalesData = {
+                  ...salesData,
+                  today_bonus: 0,
+                  today_bonus_date: new Date(),
+                };
+                setBalance(updatedSalesData);
+              } else {
+                setBalance(salesData);
+              }
+            } catch (updateError) {
+              console.error("Error resetting today's bonus:", updateError);
+              setBalance(salesData);
+            }
+          } else {
+            setBalance(salesData);
+          }
         } else {
           // No sales record found, create a new one
           if (user && !isCreatingSales) {
             setIsCreatingSales(true); // Set flag to prevent multiple creation attempts
 
+            const currentDate = new Date();
             const newSale: Sale = {
               $id: "",
               user_id: user.$id,
               balance: 0,
               number_of_rating: 0,
               total_earning: 0,
-              trial_balance: null,
+              trial_bonus: 300,
+              trial_bonus_date: currentDate,
+              today_bonus: 0,
+              today_bonus_date: currentDate,
             };
 
             try {
@@ -191,6 +232,17 @@ export default function MyPage() {
     }
   }
 
+  function isToday(date: Date | string): boolean {
+    const today = new Date();
+    const compareDate = new Date(date);
+
+    return (
+      compareDate.getDate() === today.getDate() &&
+      compareDate.getMonth() === today.getMonth() &&
+      compareDate.getFullYear() === today.getFullYear()
+    );
+  }
+
   async function handleUpdateProfile(e: React.FormEvent) {
     e.preventDefault();
 
@@ -222,8 +274,9 @@ export default function MyPage() {
       return;
     }
 
+    // Check if balance is available
     if (!balance || balance.balance <= 0) {
-      toast.error("You have no funds to withdraw");
+      toast.error("You have no balance available to withdraw");
       return;
     }
 
@@ -235,7 +288,7 @@ export default function MyPage() {
 
     setIsWithdrawing(true);
     try {
-      // Pass the current balance as the withdraw amount
+      // Pass balance as the withdraw amount
       const response = await createWithdrawal(balance.balance);
 
       if (response.error) {
@@ -309,7 +362,9 @@ export default function MyPage() {
                   title={
                     hasPendingWithdrawal
                       ? "You already have a pending withdrawal request"
-                      : ""
+                      : !balance || balance.balance <= 0
+                      ? "You have no balance available to withdraw"
+                      : "Withdraw your available balance"
                   }
                 >
                   {isWithdrawing ? "Processing..." : "Request Withdrawal"}
@@ -355,10 +410,40 @@ export default function MyPage() {
                 <CardContent>
                   <div className="text-2xl font-bold">
                     $
-                    {balance?.trial_balance !== null
-                      ? balance?.trial_balance.toFixed(2)
+                    {balance?.trial_bonus_date &&
+                    isToday(balance.trial_bonus_date)
+                      ? balance?.trial_bonus.toFixed(2)
                       : "0.00"}
                   </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {balance?.trial_bonus_date &&
+                    isToday(balance.trial_bonus_date)
+                      ? "Available today only"
+                      : "No trial bonus available today"}
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">
+                    Today&apos;s Bonus
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    $
+                    {balance?.today_bonus_date &&
+                    isToday(balance.today_bonus_date)
+                      ? balance?.today_bonus.toFixed(2)
+                      : "0.00"}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {balance?.today_bonus_date &&
+                    isToday(balance.today_bonus_date)
+                      ? "Available today only"
+                      : "No daily bonus available today"}
+                  </p>
                 </CardContent>
               </Card>
 

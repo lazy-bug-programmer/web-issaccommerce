@@ -466,12 +466,7 @@ export default function SellerPage() {
                       <TableCell>{formatDate(seller.$createdAt)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Link href={`/admin/seller/${seller.$id}/shipments`}>
-                            <Button variant="outline" size="sm">
-                              Shipments
-                            </Button>
-                          </Link>
-                          <Link href={`/admin/seller/${seller.$id}/sales`}>
+                          <Link href={`/superadmin/seller/${seller.$id}/sales`}>
                             <Button variant="outline" size="sm">
                               Sales
                             </Button>

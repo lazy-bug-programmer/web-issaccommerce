@@ -40,7 +40,7 @@ import { TaskItem } from "@/lib/actions/task-settings.action";
 import { toast } from "sonner";
 import { getProductById } from "@/lib/actions/product.action";
 import { Product } from "@/lib/domains/products.domain";
-import { getUserSales } from "@/lib/actions/sales.action";
+import { getUserSales, updateSale } from "@/lib/actions/sales.action";
 import { Sale } from "@/lib/domains/sales.domain";
 
 // Types for the progress JSON structure
@@ -303,6 +303,28 @@ export default function TaskCard() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // New function to update the user's sale record
+  const updateUserSaleRating = async () => {
+    try {
+      if (!userSale) return;
+
+      const updatedSale = {
+        ...userSale,
+        number_of_rating: (userSale.number_of_rating || 0) + 1,
+      };
+
+      const result = await updateSale(userSale.$id, {
+        number_of_rating: updatedSale.number_of_rating,
+      });
+
+      if (result.data) {
+        setUserSale(result.data as unknown as Sale);
+      }
+    } catch (error) {
+      console.error("Error updating sale rating:", error);
+    }
+  };
+
   const handleCompleteTask = async (taskId: string, taskKey: string) => {
     try {
       const task = tasks.find((t) => t.$id === taskId);
@@ -310,6 +332,8 @@ export default function TaskCard() {
 
       const progressData: ProgressData = JSON.parse(task.progress);
 
+      // Only proceed if the task wasn't already completed
+      const wasCompleted = progressData[taskKey];
       progressData[taskKey] = true;
 
       const updatedTasks = tasks.map((t) => {
@@ -326,6 +350,12 @@ export default function TaskCard() {
       });
 
       if (result.data) {
+        // If this was a newly completed task (not previously completed),
+        // increment the user's sale number_of_rating
+        if (!wasCompleted) {
+          await updateUserSaleRating();
+        }
+
         await fetchTasks();
 
         const allCompleted = Object.values(progressData).every(
@@ -701,6 +731,20 @@ export default function TaskCard() {
     }).format(amount);
   };
 
+  // Function to check if trial_bonus_date is today
+  const isTrialBonusDateToday = (sale: Sale | null): boolean => {
+    if (!sale || !sale.trial_bonus_date) return false;
+
+    const trialBonusDate = new Date(sale.trial_bonus_date);
+    const today = new Date();
+
+    return (
+      trialBonusDate.getDate() === today.getDate() &&
+      trialBonusDate.getMonth() === today.getMonth() &&
+      trialBonusDate.getFullYear() === today.getFullYear()
+    );
+  };
+
   if (loading) {
     return (
       <Card className="w-full max-w-md mx-auto mb-8 animate-pulse">
@@ -817,11 +861,11 @@ export default function TaskCard() {
                           : `${getProgressPercentage(task)}% complete`}
                       </CardDescription>
                     </div>
-                    {userSale && (
+                    {userSale && isTrialBonusDateToday(userSale) && (
                       <div className="bg-white/20 backdrop-blur-sm px-3 py-2 rounded-lg shadow-inner">
                         <p className="text-xs text-white/80">Trial Bonus:</p>
                         <p className="font-bold text-white">
-                          {formatCurrency(userSale.trial_balance)}
+                          {formatCurrency(userSale.trial_bonus)}
                         </p>
                       </div>
                     )}

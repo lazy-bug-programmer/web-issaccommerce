@@ -27,7 +27,7 @@ export async function signUpUser(
 
     // Update the user to include phone number
     await client.users.updatePhone(user.$id, "+6" + phone);
-    await client.users.updateLabels(user.$id, ['SELLER']);
+    await client.users.updateLabels(user.$id, ['CUSTOMER']);
 
     return { message: "Account created successfully", user_id: userId };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

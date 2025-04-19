@@ -228,7 +228,8 @@ export default function WithdrawalPage() {
         // Make sure we don't go negative with the balance
         const newBalance = Math.max(0, sales.balance - withdrawalAmount);
 
-        // Update the user's balance by deducting the withdrawal amount
+        // Update ONLY the user's balance by deducting the withdrawal amount
+        // No other fields should be affected
         const updateResponse = await updateSale(sales.$id, {
           balance: newBalance,
         });
@@ -242,7 +243,7 @@ export default function WithdrawalPage() {
             `Withdrawal approved and balance updated: $${newBalance.toFixed(2)}`
           );
 
-          // Update the sales cache
+          // Update only the balance in the sales cache
           setSalesCache((prev) => ({
             ...prev,
             [withdrawal.user_id]: {

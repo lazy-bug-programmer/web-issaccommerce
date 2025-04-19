@@ -13,8 +13,12 @@ const SALES_COLLECTION_ID = 'Sales';
 export async function createSale(sale: Sale) {
     try {
         const user = await getLoggedInUser();
-        if (!user) {
-            return { error: "Not authorized" };
+
+        // Use the user ID from the sale object if provided, otherwise use logged-in user
+        const userId = sale.user_id || (user ? user.$id : null);
+
+        if (!userId) {
+            return { error: "User ID is required" };
         }
 
         const { databases } = await createAdminClient();
@@ -23,7 +27,7 @@ export async function createSale(sale: Sale) {
         const existingSales = await databases.listDocuments(
             DATABASE_ID,
             SALES_COLLECTION_ID,
-            [Query.equal("user_id", user.$id)]
+            [Query.equal("user_id", userId)]
         );
 
         // If a record already exists, return it instead of creating a new one
@@ -37,12 +41,18 @@ export async function createSale(sale: Sale) {
         // Remove $id if it exists in the sale object
         const { $id, ...saleWithoutId } = sale;
 
+        // Update the user_id with the proper ID
+        const saleData = {
+            ...saleWithoutId,
+            user_id: userId
+        };
+
         // Only create if no record exists
         const newSale = await databases.createDocument(
             DATABASE_ID,
             SALES_COLLECTION_ID,
             "unique()",
-            saleWithoutId
+            saleData
         );
 
         return { data: newSale };

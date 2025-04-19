@@ -5,8 +5,8 @@ import { getLoggedInUser } from '@/lib/appwrite/server'
 export async function middleware(request: NextRequest) {
     try {
         // Check if path is admin or seller route
+        const isSuperAdminRoute = request.nextUrl.pathname.startsWith('/superadmin')
         const isAdminRoute = request.nextUrl.pathname.startsWith('/admin')
-        const isSellerRoute = request.nextUrl.pathname.startsWith('/seller')
 
         // Skip auth check for login page and public routes
         if (request.nextUrl.pathname.startsWith('/login') ||
@@ -38,24 +38,18 @@ export async function middleware(request: NextRequest) {
                 return NextResponse.redirect(loginUrl)
             }
 
-            // If we're accessing an admin or seller route, check for appropriate roles
-            if (isAdminRoute || isSellerRoute) {
+            if (isSuperAdminRoute || isAdminRoute) {
                 // Check if user has appropriate role for the route
+                const isSuperAdmin = user.labels?.includes('SUPERADMIN') || false
                 const isAdmin = user.labels?.includes('ADMIN') || false
-                const isSeller = user.labels?.includes('SELLER') || false
 
-                // Admin trying to access seller route
-                if (isAdmin && !isSeller && isSellerRoute) {
-                    return NextResponse.redirect(new URL('/admin', request.url))
+                // For superadmin routes, only allow superadmins
+                if (isSuperAdminRoute && !isSuperAdmin) {
+                    return NextResponse.redirect(new URL('/', request.url))
                 }
 
-                // Seller trying to access admin route
-                if (isSeller && !isAdmin && isAdminRoute) {
-                    return NextResponse.redirect(new URL('/seller', request.url))
-                }
-
-                // Neither admin nor seller trying to access protected route
-                if (!isAdmin && !isSeller) {
+                // For admin routes, allow both admins and superadmins
+                if (isAdminRoute && !(isAdmin || isSuperAdmin)) {
                     return NextResponse.redirect(new URL('/', request.url))
                 }
             }

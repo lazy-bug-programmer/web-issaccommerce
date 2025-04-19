@@ -16,8 +16,9 @@ interface AuthContextType {
   user: Models.User<Models.Preferences> | null;
   setUser: (user: Models.User<Models.Preferences> | null) => void;
   isLoggedIn: boolean;
+  isSuperAdmin: boolean;
   isAdmin: boolean;
-  isSeller: boolean;
+  isCustomer: boolean;
   logout: () => Promise<void>;
 }
 
@@ -31,8 +32,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const isLoggedIn = !!user;
+  const isSuperAdmin = user?.labels?.includes("SUPERADMIN") || false;
   const isAdmin = user?.labels?.includes("ADMIN") || false;
-  const isSeller = user?.labels?.includes("SELLER") || false;
+  const isCustomer = user?.labels?.includes("CUSTOMER") || false;
 
   useEffect(() => {
     const getUser = async () => {
@@ -66,8 +68,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     setUser,
     isLoggedIn,
+    isSuperAdmin,
     isAdmin,
-    isSeller,
+    isCustomer,
     logout,
   };
 

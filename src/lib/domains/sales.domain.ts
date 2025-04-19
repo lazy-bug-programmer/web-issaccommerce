@@ -4,5 +4,8 @@ export interface Sale {
     balance: number;
     number_of_rating: number;
     total_earning: number;
-    trial_balance: number | null;
+    trial_bonus: number;
+    trial_bonus_date: Date;
+    today_bonus: number;
+    today_bonus_date: Date;
 }

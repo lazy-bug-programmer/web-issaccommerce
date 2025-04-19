@@ -16,13 +16,6 @@ function generateReferralCode(): string {
 // CREATE
 export async function createReferralCode() {
     try {
-        const user = await getLoggedInUser();
-        let userId = null;
-
-        if (user) {
-            userId = user.$id;
-        }
-
         const { databases } = await createAdminClient();
 
         // Generate a unique 6-digit code
@@ -55,7 +48,6 @@ export async function createReferralCode() {
             "unique()",
             {
                 code: code,
-                user_id: userId,
             }
         );
 
@@ -69,12 +61,18 @@ export async function createReferralCode() {
 // READ
 export async function getReferralCodes(limit = 10, offset = 0) {
     try {
+        const user = await getLoggedInUser();
+        if (!user) {
+            return { error: "Not authorized", total: 0 };
+        }
+
         const { databases } = await createClient();
 
         const referralCodes = await databases.listDocuments(
             DATABASE_ID,
             REFERRAL_CODES_COLLECTION_ID,
             [
+                Query.equal("belongs_to", user.$id),
                 Query.limit(limit),
                 Query.offset(offset)
             ]
@@ -128,11 +126,6 @@ export async function validateReferralCode(code: string) {
 
         const referralCode = referralCodes.documents[0];
 
-        // If user_id is not null, the code has already been redeemed
-        if (referralCode.user_id !== null) {
-            return { valid: false, error: "Referral code has already been used" };
-        }
-
         return { valid: true, data: referralCode };
     } catch (error: any) {
         console.error("Error validating referral code:", error);
@@ -140,83 +133,6 @@ export async function validateReferralCode(code: string) {
     }
 }
 
-// Redeem a referral code by setting its user_id
-export async function redeemReferralCode(code: string, userId: string) {
-    try {
-        const { databases } = await createAdminClient();
-
-        const referralCodes = await databases.listDocuments(
-            DATABASE_ID,
-            REFERRAL_CODES_COLLECTION_ID,
-            [Query.equal("code", code)]
-        );
-
-        if (referralCodes.documents.length === 0) {
-            return { error: "Referral code not found" };
-        }
-
-        const referralCode = referralCodes.documents[0];
-
-        // Check if the code is already redeemed
-        if (referralCode.user_id !== null) {
-            return { error: "Referral code has already been used" };
-        }
-
-        // Update the referral code with the user_id
-        const updatedReferralCode = await databases.updateDocument(
-            DATABASE_ID,
-            REFERRAL_CODES_COLLECTION_ID,
-            referralCode.$id,
-            {
-                user_id: userId
-            }
-        );
-
-        return { data: updatedReferralCode };
-    } catch (error: any) {
-        console.error("Error redeeming referral code:", error);
-        return { error: error.message || "Failed to redeem referral code" };
-    }
-}
-
-export async function getReferralCodeById(referralCodeId: string) {
-    try {
-        const { databases } = await createClient();
-
-        const referralCode = await databases.getDocument(
-            DATABASE_ID,
-            REFERRAL_CODES_COLLECTION_ID,
-            referralCodeId
-        );
-
-        return { data: referralCode };
-    } catch (error: any) {
-        console.error("Error getting referral code:", error);
-        return { error: error.message || "Failed to get referral code" };
-    }
-}
-
-export async function getUserReferralCodes() {
-    try {
-        const user = await getLoggedInUser();
-        if (!user) {
-            return { error: "Not authorized" };
-        }
-
-        const { databases } = await createAdminClient();
-
-        const referralCodes = await databases.listDocuments(
-            DATABASE_ID,
-            REFERRAL_CODES_COLLECTION_ID,
-            [Query.equal("user_id", user.$id)]
-        );
-
-        return { data: referralCodes.documents };
-    } catch (error: any) {
-        console.error("Error getting user referral codes:", error);
-        return { error: error.message || "Failed to get user referral codes" };
-    }
-}
 
 // UPDATE
 export async function updateReferralCode(referralCodeId: string, updates: Partial<ReferralCode>) {
@@ -228,22 +144,15 @@ export async function updateReferralCode(referralCodeId: string, updates: Partia
 
         const { databases } = await createAdminClient();
 
-        // First check if the referral code belongs to the user
-        const referralCode = await databases.getDocument(
-            DATABASE_ID,
-            REFERRAL_CODES_COLLECTION_ID,
-            referralCodeId
-        );
-
-        if (referralCode.user_id !== user.$id) {
-            return { error: "Not authorized to update this referral code" };
-        }
+        // Only update fields that are part of the domain model
+        const validUpdates: Partial<ReferralCode> = {};
+        if (updates.code) validUpdates.code = updates.code;
 
         const updatedReferralCode = await databases.updateDocument(
             DATABASE_ID,
             REFERRAL_CODES_COLLECTION_ID,
             referralCodeId,
-            updates
+            validUpdates
         );
 
         return { data: updatedReferralCode };
@@ -263,17 +172,6 @@ export async function deleteReferralCode(referralCodeId: string) {
 
         const { databases } = await createAdminClient();
 
-        // First check if the referral code belongs to the user
-        const referralCode = await databases.getDocument(
-            DATABASE_ID,
-            REFERRAL_CODES_COLLECTION_ID,
-            referralCodeId
-        );
-
-        if (referralCode.user_id !== user.$id) {
-            return { error: "Not authorized to delete this referral code" };
-        }
-
         await databases.deleteDocument(
             DATABASE_ID,
             REFERRAL_CODES_COLLECTION_ID,
@@ -288,8 +186,13 @@ export async function deleteReferralCode(referralCodeId: string) {
 }
 
 // Admin functions
-export async function adminCreateReferralCode(userId?: string) {
+export async function adminCreateReferralCode() {
     try {
+        const user = await getLoggedInUser();
+        if (!user) {
+            return { error: "Not authorized" };
+        }
+
         const { databases } = await createAdminClient();
 
         // Generate a unique 6-digit code
@@ -322,7 +225,7 @@ export async function adminCreateReferralCode(userId?: string) {
             "unique()",
             {
                 code: code,
-                user_id: userId || null,
+                belongs_to: user.$id,
             }
         );
 
@@ -337,11 +240,15 @@ export async function adminUpdateReferralCode(referralCodeId: string, updates: P
     try {
         const { databases } = await createAdminClient();
 
+        // Only update fields that are part of the domain model
+        const validUpdates: Partial<ReferralCode> = {};
+        if (updates.code) validUpdates.code = updates.code;
+
         const updatedReferralCode = await databases.updateDocument(
             DATABASE_ID,
             REFERRAL_CODES_COLLECTION_ID,
             referralCodeId,
-            updates
+            validUpdates
         );
 
         return { data: updatedReferralCode };
