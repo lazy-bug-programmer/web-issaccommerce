@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use server";
 
@@ -87,6 +88,9 @@ export async function createProductWithImage(product: Omit<Product, "user_id" | 
         // Create product with the image URL
         const { databases } = await createAdminClient();
 
+        // Remove $id if it exists in the product object
+        const { $id, ...productData } = product as any;
+
         const newProduct = await databases.createDocument(
             DATABASE_ID,
             PRODUCTS_COLLECTION_ID,
@@ -118,6 +122,9 @@ export async function createProduct(product: Omit<Product, "user_id">) {
         }
 
         const { databases } = await createAdminClient();
+
+        // Remove $id if it exists in the product object
+        const { $id, ...productWithoutId } = product as any;
 
         const newProduct = await databases.createDocument(
             DATABASE_ID,

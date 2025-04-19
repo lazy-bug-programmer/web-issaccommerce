@@ -34,13 +34,14 @@ export async function createTaskSettings(taskSettings: TaskSettings) {
 
         const { databases } = await createAdminClient();
 
+        // Create a new object without $id property
+        const { $id, ...taskSettingsWithoutId } = taskSettings;
+
         const newTaskSettings = await databases.createDocument(
             DATABASE_ID,
             TASK_SETTINGS_COLLECTION_ID,
-            taskSettings.$id || "unique()",
-            {
-                settings: taskSettings.settings
-            }
+            $id || "unique()",
+            taskSettingsWithoutId
         );
 
         return { data: newTaskSettings };

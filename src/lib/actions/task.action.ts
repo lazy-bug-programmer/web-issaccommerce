@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use server";
 
@@ -18,14 +19,14 @@ export async function createTask(task: Task) {
 
         const { databases } = await createAdminClient();
 
+        // Remove $id if it exists in the task object
+        const { $id, ...taskWithoutId } = task;
+
         const newTask = await databases.createDocument(
             DATABASE_ID,
             TASKS_COLLECTION_ID,
             "unique()",
-            {
-                user_id: task.user_id,
-                progress: task.progress,
-            }
+            taskWithoutId
         );
 
         return { data: newTask };

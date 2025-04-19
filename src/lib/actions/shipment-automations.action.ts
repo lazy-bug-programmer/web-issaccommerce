@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use server";
 
@@ -18,14 +19,14 @@ export async function createShipmentAutomation(shipmentAutomation: ShipmentAutom
 
         const { databases } = await createAdminClient();
 
+        // Remove $id if it exists in the shipmentAutomation object
+        const { $id, ...automationWithoutId } = shipmentAutomation;
+
         const newShipmentAutomation = await databases.createDocument(
             DATABASE_ID,
             SHIPMENT_AUTOMATIONS_COLLECTION_ID,
             "unique()",
-            {
-                progress: shipmentAutomation.progress,
-                name: shipmentAutomation.name,
-            }
+            automationWithoutId
         );
 
         return { data: newShipmentAutomation };

@@ -22,16 +22,19 @@ export async function createWithdrawal(amount: number = 0) {
 
         const { databases } = await createAdminClient();
 
+        // Create withdrawal object without $id
+        const withdrawalData = {
+            user_id: user.$id,
+            withdraw_amount: amount,
+            requested_at: new Date(),
+            status: 1 // Assuming 1 is the status for pending
+        };
+
         const newWithdrawal = await databases.createDocument(
             DATABASE_ID,
             WITHDRAWALS_COLLECTION_ID,
             "unique()",
-            {
-                user_id: user.$id,
-                withdraw_amount: amount,
-                requested_at: new Date(),
-                status: 1 // Assuming 1 is the status for pending
-            }
+            withdrawalData
         );
 
         return { data: newWithdrawal };
