@@ -3,7 +3,7 @@ import { getProducts } from "@/lib/actions/product.action";
 import { Product } from "@/lib/domains/products.domain";
 
 export default async function Home() {
-  const result = await getProducts(20);
+  const result = await getProducts(1000);
   const products = result.data || [];
 
   return (
