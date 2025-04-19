@@ -40,6 +40,8 @@ import { TaskItem } from "@/lib/actions/task-settings.action";
 import { toast } from "sonner";
 import { getProductById } from "@/lib/actions/product.action";
 import { Product } from "@/lib/domains/products.domain";
+import { getUserSales } from "@/lib/actions/sales.action";
+import { Sale } from "@/lib/domains/sales.domain";
 
 // Types for the progress JSON structure
 interface ProgressData {
@@ -80,6 +82,7 @@ export default function TaskCard() {
   const [loadingProducts, setLoadingProducts] = useState<
     Record<string, boolean>
   >({});
+  const [userSale, setUserSale] = useState<Sale | null>(null);
 
   // Timer reference for animation
   const animationTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -202,6 +205,19 @@ export default function TaskCard() {
     }
   };
 
+  // Function to fetch user sales
+  const fetchUserSales = async () => {
+    try {
+      const result = await getUserSales();
+      if (result.data && result.data.length > 0) {
+        setUserSale(result.data[0] as unknown as Sale);
+      }
+    } catch (error) {
+      console.error("Error fetching user sales:", error);
+    } finally {
+    }
+  };
+
   // Function to check if user has completed a task requirement
   const hasCompletedTaskRequirement = (taskKey: string): boolean => {
     if (!taskSettings || !userOrders || !taskSettings[taskKey]) {
@@ -261,6 +277,9 @@ export default function TaskCard() {
         if (!ordersFetched) {
           await fetchUserOrders();
         }
+
+        // Fetch user sales data
+        await fetchUserSales();
       }
     } catch (error) {
       console.error("Error fetching tasks:", error);
@@ -672,6 +691,16 @@ export default function TaskCard() {
     }
   };
 
+  // Function to format currency
+  const formatCurrency = (amount: number | null | undefined) => {
+    if (amount === null || amount === undefined) return "₹0.00";
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      minimumFractionDigits: 2,
+    }).format(amount);
+  };
+
   if (loading) {
     return (
       <Card className="w-full max-w-md mx-auto mb-8 animate-pulse">
@@ -779,12 +808,24 @@ export default function TaskCard() {
             >
               <Card className="overflow-hidden shadow-lg border-2 hover:border-primary transition-all duration-300">
                 <CardHeader className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">
-                  <CardTitle>Your Learning Path</CardTitle>
-                  <CardDescription className="text-white/80">
-                    {getProgressPercentage(task) === 100
-                      ? "All tasks completed! Great job!"
-                      : `${getProgressPercentage(task)}% complete`}
-                  </CardDescription>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <CardTitle>Your Learning Path</CardTitle>
+                      <CardDescription className="text-white/80">
+                        {getProgressPercentage(task) === 100
+                          ? "All tasks completed! Great job!"
+                          : `${getProgressPercentage(task)}% complete`}
+                      </CardDescription>
+                    </div>
+                    {userSale && (
+                      <div className="bg-white/20 backdrop-blur-sm px-3 py-2 rounded-lg shadow-inner">
+                        <p className="text-xs text-white/80">Trial Balance:</p>
+                        <p className="font-bold text-white">
+                          {formatCurrency(userSale.trial_balance)}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent className="pt-6">
                   <div className="space-y-4">
