@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getShipmentAutomationById } from "@/lib/actions/shipment-automations.action";
 import { getProductById } from "@/lib/actions/product.action";
 import {
   Card,
@@ -26,15 +25,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { formatDate } from "@/lib/utils";
-import {
-  Loader2,
-  CheckCircle,
-  Circle,
-  Package,
-  ShoppingBag,
-  Clock,
-} from "lucide-react";
-import { ShipmentAutomation } from "@/lib/domains/shipment-automations.domain";
+import { Loader2, ShoppingBag, Clock } from "lucide-react";
 import { Product } from "@/lib/domains/products.domain";
 import { getUserOrders } from "@/lib/actions/orders.action";
 import { Orders } from "@/lib/domains/orders.domain";
@@ -43,18 +34,11 @@ interface OrderWithId extends Orders {
   $id: string;
 }
 
-interface ProgressStep {
-  name: string;
-  after_hour: number;
-}
-
 export default function OrdersPage() {
   const [orders, setOrders] = useState<OrderWithId[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<OrderWithId | null>(null);
-  const [progressSteps, setProgressSteps] = useState<ProgressStep[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [loadingAutomation, setLoadingAutomation] = useState(false);
   const [productData, setProductData] = useState<Record<string, Product>>({});
   const [loadingProducts, setLoadingProducts] = useState(false);
 
@@ -110,48 +94,6 @@ export default function OrdersPage() {
     setSelectedOrder(order);
     setIsModalOpen(true);
 
-    // Only fetch shipment automation if the order has one
-    if (order.shipment_automation_id) {
-      try {
-        setLoadingAutomation(true);
-
-        // Fetch shipment automation
-        const automationResponse = await getShipmentAutomationById(
-          order.shipment_automation_id
-        );
-
-        if (automationResponse.data) {
-          const automationData =
-            automationResponse.data as unknown as ShipmentAutomation & {
-              $id: string;
-            };
-
-          // Parse the progress JSON string if it exists
-          if (automationData.progress) {
-            try {
-              const parsedProgress = JSON.parse(
-                automationData.progress
-              ) as ProgressStep[];
-              setProgressSteps(parsedProgress);
-            } catch (e) {
-              console.error("Error parsing progress JSON:", e);
-              setProgressSteps([]);
-            }
-          } else {
-            setProgressSteps([]);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching shipment details:", error);
-      } finally {
-        setLoadingAutomation(false);
-      }
-    } else {
-      // Reset shipment data if there is no shipment
-      setProgressSteps([]);
-      setLoadingAutomation(false);
-    }
-
     // If we don't have the product data yet, fetch it
     if (order.product_id && !productData[order.product_id]) {
       const productResponse = await getProductById(order.product_id);
@@ -195,41 +137,19 @@ export default function OrdersPage() {
     return `$${price.toFixed(2)}`;
   };
 
-  // Calculate the current progress based on order date and elapsed time
-  const calculateCurrentProgress = (order: OrderWithId) => {
-    if (!progressSteps.length) return null;
+  // Calculate total price for an order
+  const calculateOrderTotal = (order: OrderWithId) => {
+    const product = productData[order.product_id];
+    if (!product) return 0;
 
-    const orderDate = new Date(order.ordered_at);
-    const now = new Date();
-
-    // Calculate hours elapsed since order
-    const hoursElapsed =
-      (now.getTime() - orderDate.getTime()) / (1000 * 60 * 60);
-
-    // Find the current step based on elapsed time
-    let currentStep = progressSteps[0];
-    for (let i = progressSteps.length - 1; i >= 0; i--) {
-      if (hoursElapsed >= progressSteps[i].after_hour) {
-        currentStep = progressSteps[i];
-        break;
-      }
-    }
-
-    return currentStep;
+    const finalPrice = product.price * (1 - product.discount_rate / 100);
+    return finalPrice * order.amount;
   };
 
-  // Get order status text
-  const getOrderStatusText = (order: OrderWithId) => {
-    if (!order.shipment_automation_id) {
-      return "Preparing your order";
-    }
-
-    if (progressSteps.length === 0) {
-      return "Processing";
-    }
-
-    const currentStep = calculateCurrentProgress(order);
-    return currentStep?.name || "Processing";
+  // Calculate commission (3% of total price)
+  const calculateCommission = (order: OrderWithId) => {
+    const total = calculateOrderTotal(order);
+    return total * 0.03;
   };
 
   // Render the orders page
@@ -267,16 +187,8 @@ export default function OrdersPage() {
                           getProductName(order.product_id)
                         )}
                       </CardTitle>
-                      <div
-                        className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          order.shipment_automation_id
-                            ? "bg-blue-100 text-blue-800"
-                            : "bg-amber-100 text-amber-800"
-                        }`}
-                      >
-                        {order.shipment_automation_id
-                          ? "Shipping"
-                          : "Preparing"}
+                      <div className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        Order Placed
                       </div>
                     </div>
                     <CardDescription>
@@ -308,16 +220,21 @@ export default function OrdersPage() {
                         </span>
                         {order.amount}
                       </div>
+
+                      {!loadingProducts && productData[order.product_id] && (
+                        <div className="text-sm">
+                          <span className="text-muted-foreground">
+                            Commission (3%):{" "}
+                          </span>
+                          ${calculateCommission(order).toFixed(2)}
+                        </div>
+                      )}
                     </div>
 
                     <div className="mt-4 flex items-center text-sm">
-                      {order.shipment_automation_id ? (
-                        <Package className="h-4 w-4 mr-1.5 text-blue-500" />
-                      ) : (
-                        <Clock className="h-4 w-4 mr-1.5 text-amber-500" />
-                      )}
+                      <Clock className="h-4 w-4 mr-1.5 text-amber-500" />
                       <span className="font-medium">
-                        {getOrderStatusText(order)}
+                        Order placed on {formatDateValue(order.ordered_at)}
                       </span>
                     </div>
                   </CardContent>
@@ -387,15 +304,22 @@ export default function OrdersPage() {
                     {!loadingProducts &&
                     productData[selectedOrder.product_id] ? (
                       <span className="font-medium">
-                        $
-                        {(
-                          productData[selectedOrder.product_id].price *
-                          (1 -
-                            productData[selectedOrder.product_id]
-                              .discount_rate /
-                              100) *
-                          selectedOrder.amount
-                        ).toFixed(2)}
+                        ${calculateOrderTotal(selectedOrder).toFixed(2)}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center">
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                      </span>
+                    )}
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-muted-foreground">
+                      Commission (3%):
+                    </span>{" "}
+                    {!loadingProducts &&
+                    productData[selectedOrder.product_id] ? (
+                      <span className="font-medium text-green-600">
+                        ${calculateCommission(selectedOrder).toFixed(2)}
                       </span>
                     ) : (
                       <span className="inline-flex items-center">
@@ -406,88 +330,16 @@ export default function OrdersPage() {
                 </div>
               </div>
 
-              {/* Shipment Information */}
-              <div>
-                <h3 className="font-semibold mb-3">Shipment Status</h3>
-
-                {!selectedOrder.shipment_automation_id ? (
-                  <div className="bg-amber-50 text-amber-700 p-4 rounded-lg flex items-start">
-                    <Clock className="h-5 w-5 mr-3 mt-0.5" />
-                    <div>
-                      <p className="font-medium">Preparing Your Order</p>
-                      <p className="text-sm">
-                        Your order is being prepared and will be shipped soon.
-                      </p>
-                    </div>
-                  </div>
-                ) : loadingAutomation ? (
-                  <div className="flex justify-center my-8">
-                    <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
-                  </div>
-                ) : progressSteps.length > 0 ? (
-                  <div className="relative pl-6 pb-2">
-                    {/* Timeline Track */}
-                    <div className="absolute left-[15px] top-0 h-full w-[2px] bg-gray-200"></div>
-
-                    {/* Progress Steps */}
-                    <div className="space-y-8 relative z-10">
-                      {progressSteps.map((step, index) => {
-                        const currentStep =
-                          calculateCurrentProgress(selectedOrder);
-                        const isCompleted =
-                          currentStep &&
-                          step.after_hour <= currentStep.after_hour;
-                        const isCurrent =
-                          currentStep && step.name === currentStep.name;
-
-                        return (
-                          <div key={index} className="flex items-start">
-                            <div className="mr-3 absolute left-[-20px]">
-                              {isCompleted ? (
-                                <CheckCircle className="h-7 w-7 text-green-500" />
-                              ) : (
-                                <Circle
-                                  className={`h-7 w-7 ${
-                                    isCurrent
-                                      ? "text-blue-500"
-                                      : "text-gray-300"
-                                  }`}
-                                />
-                              )}
-                            </div>
-                            <div className="pl-5">
-                              <h4
-                                className={`font-medium ${
-                                  isCurrent
-                                    ? "text-blue-600"
-                                    : isCompleted
-                                    ? "text-green-600"
-                                    : "text-gray-600"
-                                }`}
-                              >
-                                {step.name}
-                              </h4>
-                              <p className="text-sm text-gray-500">
-                                {step.after_hour === 0
-                                  ? "Immediately after ordering"
-                                  : `${step.after_hour} hours after ordering`}
-                              </p>
-                              {isCurrent && (
-                                <p className="text-sm font-medium text-blue-500 mt-1">
-                                  Current Status
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-gray-500 italic">
-                    No shipment progress information available.
+              {/* Order Date Information */}
+              <div className="bg-blue-50 text-blue-700 p-4 rounded-lg flex items-start">
+                <Clock className="h-5 w-5 mr-3 mt-0.5" />
+                <div>
+                  <p className="font-medium">Order Placed</p>
+                  <p className="text-sm">
+                    Your order was placed on{" "}
+                    {formatDateValue(selectedOrder.ordered_at)}
                   </p>
-                )}
+                </div>
               </div>
 
               {/* Order Details Accordion */}
@@ -500,12 +352,6 @@ export default function OrdersPage() {
                         <span className="font-medium">Order ID:</span>{" "}
                         {selectedOrder.$id}
                       </div>
-                      {selectedOrder.shipment_automation_id && (
-                        <div>
-                          <span className="font-medium">Shipment ID:</span>{" "}
-                          {selectedOrder.shipment_automation_id}
-                        </div>
-                      )}
                       <div>
                         <span className="font-medium">Product ID:</span>{" "}
                         {selectedOrder.product_id}

@@ -60,7 +60,7 @@ export async function getAllSeller(
                 name: user.name,
                 email: user.email,
                 status: user.status,
-                prefs: user.prefs,
+                phone: user.phone,
                 labels: user.labels,
                 $createdAt: user.$createdAt,
             })),
@@ -110,13 +110,30 @@ export async function getSellerById(user_id: string) {
 export async function updateSeller(
     sellerId: string,
     name: string,
+    phone?: string,
+    password?: string
 ) {
     try {
         const client = await createAdminClient();
+
+        // Update name
         await client.users.updateName(sellerId, name);
-        return { message: "Seller updated successfully" };
-    } catch (err: any) {
-        console.error("Error updating seller:", err);
+
+        // Update phone if provided
+        if (phone !== undefined) {
+            // Ensure phone has proper format if needed
+            const formattedPhone = phone.startsWith('+') ? phone : '+' + phone;
+            await client.users.updatePhone(sellerId, formattedPhone);
+        }
+
+        // Update password if provided
+        if (password !== undefined) {
+            await client.users.updatePassword(sellerId, password);
+        }
+
+        return { success: true };
+    } catch (error) {
+        console.error("Error updating seller:", error);
         return { error: "Failed to update seller" };
     }
 }

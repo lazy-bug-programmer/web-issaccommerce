@@ -123,3 +123,26 @@ export async function getUserById(userId: string) {
     return { success: false, error: "Failed to fetch user information" };
   }
 }
+
+export async function updateUserPassword(
+  userId: string,
+  newPassword: string
+) {
+  try {
+    const client = await createAdminClient();
+
+    // Update the password directly without verification
+    await client.users.updatePassword(userId, newPassword);
+
+    return {
+      success: true,
+      message: "Password updated successfully"
+    };
+  } catch (error) {
+    console.error("Error updating password:", error);
+    return {
+      success: false,
+      error: "Failed to update password"
+    };
+  }
+}

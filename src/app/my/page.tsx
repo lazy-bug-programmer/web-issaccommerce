@@ -14,7 +14,7 @@ import {
   getUserWithdrawals,
 } from "@/lib/actions/withdrawal.action";
 import { useAuth } from "@/lib/auth-context";
-import { updateUserInfo } from "@/lib/actions/auth.action";
+import { updateUserInfo, updateUserPassword } from "@/lib/actions/auth.action";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,6 +28,13 @@ import {
 } from "@/components/ui/table";
 import { Sale } from "@/lib/domains/sales.domain";
 import { Withdrawal } from "@/lib/domains/withdrawal.domain";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 export default function MyPage() {
   const router = useRouter();
@@ -39,11 +46,19 @@ export default function MyPage() {
   const [hasPendingWithdrawal, setHasPendingWithdrawal] = useState(false);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [isCreatingSales, setIsCreatingSales] = useState(false);
+  const [withdrawalAmount, setWithdrawalAmount] = useState<string>("");
+  const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
 
   // Profile update state
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
+
+  // Password update state
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
 
   useEffect(() => {
     fetchBalance();
@@ -268,6 +283,45 @@ export default function MyPage() {
     }
   }
 
+  async function handleUpdatePassword(e: React.FormEvent) {
+    e.preventDefault();
+
+    if (!user) {
+      toast.error("You must be logged in to update your password");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast.error("New passwords do not match");
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      toast.error("New password must be at least 8 characters long");
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+    try {
+      const response = await updateUserPassword(user.$id, newPassword);
+
+      if (response.success) {
+        toast.success(response.message);
+        // Clear form fields after successful update
+        setNewPassword("");
+        setConfirmPassword("");
+        setShowPasswordForm(false);
+      } else {
+        toast.error(response.error || "Failed to update password");
+      }
+    } catch (error) {
+      console.error("Error updating password:", error);
+      toast.error("An unexpected error occurred");
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  }
+
   async function handleWithdrawal() {
     if (!user) {
       toast.error("You must be logged in to request a withdrawal");
@@ -286,15 +340,40 @@ export default function MyPage() {
       return;
     }
 
+    // Open withdrawal dialog instead of immediately processing
+    setWithdrawalAmount(balance.balance.toString());
+    setWithdrawDialogOpen(true);
+  }
+
+  async function processWithdrawal() {
+    // Validate the withdrawal amount
+    const amount = parseFloat(withdrawalAmount);
+
+    if (isNaN(amount)) {
+      toast.error("Please enter a valid amount");
+      return;
+    }
+
+    if (amount <= 0) {
+      toast.error("Withdrawal amount must be greater than 0");
+      return;
+    }
+
+    if (!balance || amount > balance.balance) {
+      toast.error("Withdrawal amount cannot exceed your available balance");
+      return;
+    }
+
     setIsWithdrawing(true);
     try {
-      // Pass balance as the withdraw amount
-      const response = await createWithdrawal(balance.balance);
+      // Use the validated amount instead of the full balance
+      const response = await createWithdrawal(amount);
 
       if (response.error) {
         toast.error(response.error);
       } else {
         toast.success("Withdrawal request submitted successfully");
+        setWithdrawDialogOpen(false);
         // Refresh data
         await fetchBalance();
         await fetchWithdrawals();
@@ -462,6 +541,47 @@ export default function MyPage() {
             </div>
           </div>
 
+          {/* Withdrawal Dialog */}
+          <Dialog
+            open={withdrawDialogOpen}
+            onOpenChange={setWithdrawDialogOpen}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Request Withdrawal</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label htmlFor="withdrawal-amount">Withdrawal Amount</Label>
+                  <Input
+                    id="withdrawal-amount"
+                    type="number"
+                    step="0.01"
+                    value={withdrawalAmount}
+                    onChange={(e) => setWithdrawalAmount(e.target.value)}
+                    min="0.01"
+                    max={balance?.balance}
+                    placeholder="Enter amount"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Available balance: ${balance?.balance.toFixed(2) || "0.00"}
+                  </p>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setWithdrawDialogOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={processWithdrawal} disabled={isWithdrawing}>
+                  {isWithdrawing ? "Processing..." : "Confirm Withdrawal"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
           {/* Withdrawal History Section */}
           <div className="mt-6">
             <h3 className="text-xl font-semibold mb-4">Withdrawal History</h3>
@@ -503,7 +623,9 @@ export default function MyPage() {
 
           <div className="mt-8">
             <h3 className="text-xl font-semibold mb-4">Account Settings</h3>
-            <Card>
+
+            {/* Profile Update Card */}
+            <Card className="mb-4">
               <CardHeader>
                 <CardTitle>Update Profile</CardTitle>
               </CardHeader>
@@ -538,6 +660,69 @@ export default function MyPage() {
                   </Button>
                 </form>
               </CardContent>
+            </Card>
+
+            {/* Password Update Card */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                <CardTitle>Update Password</CardTitle>
+                {!showPasswordForm && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowPasswordForm(true)}
+                  >
+                    Change Password
+                  </Button>
+                )}
+              </CardHeader>
+              {showPasswordForm && (
+                <CardContent>
+                  <form onSubmit={handleUpdatePassword} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="new-password">New Password</Label>
+                      <Input
+                        id="new-password"
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="Enter new password"
+                        required
+                        minLength={8}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="confirm-password">
+                        Confirm New Password
+                      </Label>
+                      <Input
+                        id="confirm-password"
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Confirm new password"
+                        required
+                      />
+                    </div>
+
+                    <div className="flex space-x-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setShowPasswordForm(false);
+                          setNewPassword("");
+                          setConfirmPassword("");
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={isUpdatingPassword}>
+                        {isUpdatingPassword ? "Updating..." : "Update Password"}
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              )}
             </Card>
           </div>
         </>

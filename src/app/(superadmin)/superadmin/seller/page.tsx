@@ -64,10 +64,7 @@ type Seller = {
   name: string;
   email: string;
   status: string;
-  prefs: {
-    phone?: string;
-    status?: string;
-  };
+  phone: string;
   labels: string[];
   $createdAt: string;
 };
@@ -91,12 +88,34 @@ const formSchema = z
     path: ["confirmPassword"],
   });
 
-// Create a schema for editing sellers (without password fields)
-const editFormSchema = z.object({
-  name: z.string().min(2, {
-    message: "Name must be at least 2 characters",
-  }),
-});
+// Create a schema for editing sellers (with optional password fields)
+const editFormSchema = z
+  .object({
+    name: z.string().min(2, {
+      message: "Name must be at least 2 characters",
+    }),
+    phone: z.string().optional(),
+    password: z
+      .string()
+      .min(8, {
+        message: "Password must be at least 8 characters",
+      })
+      .optional(),
+    confirmPassword: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      // Only validate confirmPassword if password is provided
+      if (data.password && data.password !== data.confirmPassword) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: "Passwords do not match",
+      path: ["confirmPassword"],
+    }
+  );
 
 export default function SellerPage() {
   const [sellers, setSellers] = useState<Seller[]>([]);
@@ -127,6 +146,9 @@ export default function SellerPage() {
     resolver: zodResolver(editFormSchema),
     defaultValues: {
       name: "",
+      phone: "",
+      password: "",
+      confirmPassword: "",
     },
   });
 
@@ -183,7 +205,14 @@ export default function SellerPage() {
 
     try {
       setIsSubmitting(true);
-      const response = await updateSeller(currentSeller.$id, values.name);
+
+      // Only pass password if it's provided
+      const response = await updateSeller(
+        currentSeller.$id,
+        values.name,
+        values.phone || undefined,
+        values.password || undefined
+      );
 
       if (response.error) {
         toast.error(response.error);
@@ -208,6 +237,9 @@ export default function SellerPage() {
     setCurrentSeller(seller);
     editForm.reset({
       name: seller.name || "",
+      phone: seller.phone || "",
+      password: "",
+      confirmPassword: "",
     });
     setOpen(true);
   }
@@ -303,6 +335,63 @@ export default function SellerPage() {
                       </FormItem>
                     )}
                   />
+
+                  <FormField
+                    control={editForm.control}
+                    name="phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Phone</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Phone number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium">
+                      Change Password (Optional)
+                    </h4>
+                    <div className="space-y-4">
+                      <FormField
+                        control={editForm.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>New Password</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="New password"
+                                type="password"
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={editForm.control}
+                        name="confirmPassword"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Confirm New Password</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="Confirm new password"
+                                type="password"
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </div>
 
                   <DialogFooter>
                     <Button type="submit" disabled={isSubmitting}>
@@ -426,7 +515,7 @@ export default function SellerPage() {
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Role</TableHead>
                   <TableHead>Created Date</TableHead>
                   <TableHead className="text-right w-[120px]">
                     Actions
@@ -447,21 +536,9 @@ export default function SellerPage() {
                         {seller.name || "Unnamed"}
                       </TableCell>
                       <TableCell>{seller.email}</TableCell>
-                      <TableCell>{seller.prefs?.phone || "N/A"}</TableCell>
+                      <TableCell>{seller.phone || "N/A"}</TableCell>
                       <TableCell>
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs ${
-                            seller.prefs?.status === "active"
-                              ? "bg-green-100 text-green-800"
-                              : seller.prefs?.status === "inactive"
-                              ? "bg-gray-100 text-gray-800"
-                              : seller.prefs?.status === "suspended"
-                              ? "bg-red-100 text-red-800"
-                              : "bg-blue-100 text-blue-800"
-                          }`}
-                        >
-                          {seller.prefs?.status || "Active"}
-                        </span>
+                        {seller.labels.includes("ADMIN") ? "Admin" : "Seller"}
                       </TableCell>
                       <TableCell>{formatDate(seller.$createdAt)}</TableCell>
                       <TableCell className="text-right">
