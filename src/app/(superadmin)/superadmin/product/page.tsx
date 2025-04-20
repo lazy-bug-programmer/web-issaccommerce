@@ -68,8 +68,8 @@ const formSchema = z.object({
     message: "Description must be at least 10 characters",
   }),
   image_urls: z.array(z.string()),
-  price: z.coerce.number().positive({
-    message: "Price must be a positive number",
+  price: z.coerce.number().min(0.01, {
+    message: "Price must be greater than 0",
   }),
   quantity: z.coerce.number().int().nonnegative({
     message: "Quantity must be a non-negative integer",
@@ -488,8 +488,15 @@ export default function ProductsPage() {
                           <Input
                             type="number"
                             step="0.01"
+                            min="0.01"
                             placeholder="29.99"
                             {...field}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              field.onChange(
+                                value === "" ? "" : parseFloat(value)
+                              );
+                            }}
                           />
                         </FormControl>
                         <FormMessage />
