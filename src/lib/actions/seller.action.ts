@@ -148,3 +148,38 @@ export async function deleteSeller(sellerId: string) {
         return { error: "Failed to delete seller" };
     }
 }
+
+export async function getSellersByReferralCode(referralCode: string) {
+    try {
+        const client = await createAdminClient();
+
+        // First get all users with CUSTOMER label
+        const queries = [
+            Query.contains("labels", "CUSTOMER"),
+            Query.limit(100),
+        ];
+
+        const response = await client.users.list(queries);
+
+        // Filter users who have the referral code in their preferences
+        const sellers = response.users.filter(user => {
+            const prefs = user.prefs || {};
+            return prefs.referralCode === referralCode;
+        });
+
+        return {
+            sellers: sellers.map(user => ({
+                $id: user.$id,
+                name: user.name,
+                email: user.email,
+                phone: user.phone,
+                status: user.status,
+                $createdAt: user.$createdAt,
+            })),
+            total: sellers.length
+        };
+    } catch (error: any) {
+        console.error("Error fetching sellers by referral code:", error);
+        return { error: "Failed to fetch sellers", sellers: [] };
+    }
+}

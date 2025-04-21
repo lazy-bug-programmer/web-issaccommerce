@@ -50,6 +50,7 @@ import {
   getProductImage,
   getProducts,
   updateProduct,
+  updateProductWithImages,
 } from "@/lib/actions/product.action";
 import { Product } from "@/lib/domains/products.domain";
 import {
@@ -191,15 +192,46 @@ export default function ProductsPage() {
       if (isEditing && currentProduct) {
         const updatedValues = { ...values };
 
-        if (imageFiles.length === 0 && currentProduct.image_urls) {
-          updatedValues.image_urls = currentProduct.image_urls;
+        const currentImageUrls: string[] = [];
+
+        if (imagePreview.length > 0) {
+          imagePreview.forEach((preview, index) => {
+            if (
+              index < (currentProduct.image_urls?.length || 0) &&
+              preview === productImages[currentProduct.image_urls[index]]
+            ) {
+              currentImageUrls.push(currentProduct.image_urls[index]);
+            }
+          });
         }
 
-        const response = await updateProduct(currentProduct.$id, updatedValues);
-        if (response.error) {
-          toast.error(response.error);
-          return;
+        if (imageFiles.length > 0) {
+          const response = await updateProductWithImages(
+            currentProduct.$id,
+            {
+              ...updatedValues,
+              image_urls: currentImageUrls,
+            },
+            imageFiles,
+            false
+          );
+
+          if (response.error) {
+            toast.error(response.error);
+            return;
+          }
+        } else {
+          const response = await updateProduct(currentProduct.$id, {
+            ...updatedValues,
+            image_urls: currentImageUrls,
+          });
+
+          if (response.error) {
+            toast.error(response.error);
+            return;
+          }
         }
+
         toast.success("Product updated successfully");
       } else {
         if (imageFiles.length > 0) {
@@ -336,9 +368,7 @@ export default function ProductsPage() {
       currentProduct &&
       index < (currentProduct.image_urls?.length || 0)
     ) {
-      const currentUrls = form.getValues("image_urls");
-      currentUrls.splice(index, 1);
-      form.setValue("image_urls", currentUrls);
+      // No need to modify form.image_urls here as we'll rebuild it during submit
     } else {
       const newIndex =
         isEditing && currentProduct

@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
-import { Gift } from "lucide-react";
+import { Gift, Settings } from "lucide-react";
 
 export default function AdminDashboard() {
   return (
@@ -24,6 +24,22 @@ export default function AdminDashboard() {
               <p className="text-muted-foreground">
                 Create and manage referral codes, track conversions, and analyze
                 referral program performance.
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/admin/task_settings" className="block h-full">
+          <Card className="h-full transition-all hover:shadow-md hover:border-primary/50">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-xl font-semibold">
+                Task Settings
+              </CardTitle>
+              <Settings className="h-6 w-6 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">
+                Configure and manage task-related settings and parameters.
               </p>
             </CardContent>
           </Card>

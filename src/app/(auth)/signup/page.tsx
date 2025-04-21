@@ -82,7 +82,8 @@ export default function SignupPage() {
         values.name,
         values.phone,
         values.password,
-        values.confirmPassword
+        values.confirmPassword,
+        values.referralCode // Pass the referral code to the signUp function
       );
 
       if (res.error) {

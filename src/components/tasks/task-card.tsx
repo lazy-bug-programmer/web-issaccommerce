@@ -35,7 +35,10 @@ import { DiamondShower } from "../animations/diamond-shower";
 import { ShoppingBags } from "../animations/shopping-bags";
 import { GiftCards } from "../animations/gift-card";
 import { useRouter } from "next/navigation";
-import { getTaskSettingsById } from "@/lib/actions/task-settings.action";
+import {
+  getTaskSettingsById,
+  getTaskSettingsByAdminId,
+} from "@/lib/actions/task-settings.action";
 import { getUserOrders } from "@/lib/actions/orders.action";
 import { Orders } from "@/lib/domains/orders.domain";
 import { TaskItem } from "@/lib/actions/task-settings.action";
@@ -49,6 +52,9 @@ import { Product } from "@/lib/domains/products.domain";
 import { getUserSales, updateSale } from "@/lib/actions/sales.action";
 import { Sale } from "@/lib/domains/sales.domain";
 import { createOrder } from "@/lib/actions/orders.action";
+import { getReferralCodeByCode } from "@/lib/actions/referral-code.action";
+import { getAdminById } from "@/lib/actions/admin.action";
+import { getUserPrefs } from "@/lib/actions/auth.action";
 
 // Types for the progress JSON structure
 interface ProgressData {
@@ -98,6 +104,13 @@ export default function TaskCard() {
     taskId: string;
     taskKey: string;
   }>({ open: false, productId: "", taskId: "", taskKey: "" });
+
+  // New state for admin and admin task settings
+  const [adminId, setAdminId] = useState<string | null>(null);
+  const [adminTaskSettings, setAdminTaskSettings] = useState<Record<
+    string,
+    TaskItem
+  > | null>(null);
 
   // Timer reference for animation
   const animationTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -170,22 +183,102 @@ export default function TaskCard() {
     }
   };
 
-  // Function to fetch task settings
+  // Function to fetch user's referral code from preferences and associated admin
+  const fetchUserReferralAdmin = async () => {
+    try {
+      // Get user preferences to find referral code
+      const userPrefsResult = await getUserPrefs();
+      if (userPrefsResult.error || !userPrefsResult.data) {
+        console.log("No user preferences found or error fetching them");
+        return null;
+      }
+
+      const referralCode = userPrefsResult.data.referralCode;
+      if (!referralCode) {
+        console.log("No referral code found in user preferences");
+        return null;
+      }
+
+      // Validate the referral code and get the admin ID
+      const referralResult = await getReferralCodeByCode(referralCode);
+      if (referralResult.error || !referralResult.data) {
+        console.log("Invalid referral code or error fetching it");
+        return null;
+      }
+
+      const adminUserId = referralResult.data.belongs_to;
+      if (!adminUserId) {
+        console.log("No admin associated with this referral code");
+        return null;
+      }
+
+      // Fetch admin details if needed
+      const adminResult = await getAdminById(adminUserId);
+      if (adminResult.error || !adminResult.data) {
+        console.log("Error fetching admin details");
+        return null;
+      }
+
+      // Set the admin ID for later use
+      setAdminId(adminUserId);
+      return adminUserId;
+    } catch (error) {
+      console.error("Error fetching user's referral admin:", error);
+      return null;
+    }
+  };
+
+  // Function to fetch admin task settings
+  const fetchAdminTaskSettings = async (adminId: string) => {
+    try {
+      const result = await getTaskSettingsByAdminId(adminId);
+      if (result.data) {
+        if (result.data.settings) {
+          const settingsData = JSON.parse(result.data.settings);
+          setAdminTaskSettings(settingsData);
+
+          // Fetch product details for all admin task requirements
+          Object.values(settingsData).forEach((task: any) => {
+            if (task.product_id && task.product_id !== "") {
+              fetchProductDetails(task.product_id);
+            }
+          });
+        } else {
+          console.log(
+            `Admin task settings found but has no settings data for ${adminId}`
+          );
+        }
+      } else {
+        console.log(`No task settings found for admin ${adminId}`);
+      }
+    } catch (error) {
+      console.error("Error fetching admin task settings:", error);
+    }
+  };
+
+  // Function to fetch task settings - now includes admin task settings
   const fetchTaskSettings = async () => {
     try {
+      // First fetch default task settings
       const result = await getTaskSettingsById("task-settings");
-      if (result.data && result.data.settings) {
+      if (result.data) {
         const settingsData = JSON.parse(result.data.settings);
         setTaskSettings(settingsData);
 
         // Fetch product details for all task requirements
-        (Object.values(settingsData) as TaskItem[]).forEach((task) => {
+        Object.values(settingsData).forEach((task: any) => {
           if (task.product_id && task.product_id !== "") {
             fetchProductDetails(task.product_id);
           }
         });
       } else {
-        console.error("No task settings found");
+        console.error("No default task settings found");
+      }
+
+      // Now try to fetch admin-specific task settings if we have an admin ID
+      const userAdminId = adminId || (await fetchUserReferralAdmin());
+      if (userAdminId) {
+        await fetchAdminTaskSettings(userAdminId);
       }
     } catch (error) {
       console.error("Error fetching task settings:", error);
@@ -219,14 +312,56 @@ export default function TaskCard() {
     }
   };
 
-  // Function to check if user has completed a task requirement
+  // Function to determine which task setting to use for a specific task
+  const getTaskRequirement = (taskKey: string): TaskItem | null => {
+    if (!taskSettings) return null;
+
+    // First check if we have admin task settings for this key
+    if (adminTaskSettings && adminTaskSettings[taskKey]) {
+      const adminTaskSetting = adminTaskSettings[taskKey];
+
+      // If admin task has user_id field, check if it includes the current user
+      if (adminTaskSetting.user_id) {
+        const userIds = Array.isArray(adminTaskSetting.user_id)
+          ? adminTaskSetting.user_id
+          : [adminTaskSetting.user_id];
+
+        // Get current user ID
+        const currentUserId = userSale?.user_id || null;
+
+        if (currentUserId && userIds.includes(currentUserId)) {
+          console.log(
+            `Using admin task for ${taskKey} - user is in user_id list`
+          );
+          return adminTaskSetting;
+        }
+      } else if (
+        adminTaskSetting.product_id &&
+        adminTaskSetting.product_id !== ""
+      ) {
+        // If no user_id restrictions but has a valid product_id, use admin setting
+        console.log(`Using admin task for ${taskKey} - no user restrictions`);
+        return adminTaskSetting;
+      }
+    }
+
+    // Fall back to default task setting
+    console.log(`Using default task for ${taskKey}`);
+    return taskSettings[taskKey];
+  };
+
+  // Function to check if user has completed a task requirement - modified for admin tasks
   const hasCompletedTaskRequirement = (taskKey: string): boolean => {
-    if (!taskSettings || !userOrders || !taskSettings[taskKey]) {
+    if (!userOrders) {
       return false;
     }
 
-    const taskRequirement = taskSettings[taskKey];
-    if (!taskRequirement.product_id || taskRequirement.product_id === "") {
+    const taskRequirement = getTaskRequirement(taskKey);
+    if (
+      !taskRequirement ||
+      !taskRequirement.product_id ||
+      taskRequirement.product_id === ""
+    ) {
       return true;
     }
 
@@ -486,7 +621,7 @@ export default function TaskCard() {
       await fetchUserOrders();
     }
 
-    const taskRequirements = taskSettings?.[taskKey] || null;
+    const taskRequirements = getTaskRequirement(taskKey);
     const isRequirementMet = hasCompletedTaskRequirement(taskKey);
 
     // Fetch product details if not already loaded
@@ -670,7 +805,7 @@ export default function TaskCard() {
       return Object.entries(progressData).map(([key, completed]) => {
         const isPaywall = key.startsWith("paywall");
         const available = isTaskAvailable(key, progressData);
-        const requirement = taskSettings?.[key];
+        const requirement = getTaskRequirement(key);
         const requirementMet = hasCompletedTaskRequirement(key);
         const requirementExists =
           requirement &&
@@ -723,6 +858,15 @@ export default function TaskCard() {
                     }`}
                   >
                     {key.replace(/([A-Z])/g, " $1").trim()}{" "}
+                    {/* Show admin indicator if using admin task settings */}
+                    {adminTaskSettings &&
+                      adminTaskSettings[key] &&
+                      adminTaskSettings[key].product_id ===
+                        requirement?.product_id && (
+                        <span className="text-xs text-blue-500 ml-1">
+                          (Admin)
+                        </span>
+                      )}
                   </h4>
                   <p className="text-sm text-muted-foreground">
                     {completed
@@ -1226,7 +1370,9 @@ function ProductTaskDialog({
 
       // Set state based on whether user has enough money
       if (totalMoney < totalCost) {
-        setErrorMessage(`Insufficient balance. Please topup via /my`);
+        setErrorMessage(
+          `Insufficient balance. Please topup via Customer Service`
+        );
         setHasSufficientFunds(false);
       } else {
         setHasSufficientFunds(true);
@@ -1465,9 +1611,9 @@ function ProductTaskDialog({
               >
                 Total: {formatCurrency(totalAvailableFunds)}
                 {!hasSufficientFunds &&
-                  ` (Need ${formatCurrency(
+                  ` (-${formatCurrency(
                     totalCost - totalAvailableFunds
-                  )} more)`}
+                  )}, please contact Customer Service)`}
               </span>
             </div>
           </div>

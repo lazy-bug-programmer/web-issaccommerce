@@ -14,8 +14,9 @@ export default function AdminLayout({
   const pathname = usePathname();
 
   const navItems = [
-    { path: "/superadmin", label: "Dashboard" },
-    { path: "/superadmin/referral_code", label: "Referral Code" },
+    { path: "/admin", label: "Dashboard" },
+    { path: "/admin/referral_code", label: "Referral Code" },
+    { path: "/admin/task_settings", label: "Task Settings" },
   ];
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);

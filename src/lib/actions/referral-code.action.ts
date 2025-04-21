@@ -59,7 +59,7 @@ export async function createReferralCode() {
 }
 
 // READ
-export async function getReferralCodes(limit = 10, offset = 0) {
+export async function getReferralCodes(limit = 10, offset = 0, userId?: string) {
     try {
         const user = await getLoggedInUser();
         if (!user) {
@@ -68,14 +68,22 @@ export async function getReferralCodes(limit = 10, offset = 0) {
 
         const { databases } = await createClient();
 
+        const queries = [
+            Query.limit(limit),
+            Query.offset(offset)
+        ];
+
+        // If userId is specified, use it instead of the current user's ID
+        if (userId) {
+            queries.push(Query.equal("belongs_to", userId));
+        } else {
+            queries.push(Query.equal("belongs_to", user.$id));
+        }
+
         const referralCodes = await databases.listDocuments(
             DATABASE_ID,
             REFERRAL_CODES_COLLECTION_ID,
-            [
-                Query.equal("belongs_to", user.$id),
-                Query.limit(limit),
-                Query.offset(offset)
-            ]
+            queries
         );
 
         return {
@@ -186,11 +194,16 @@ export async function deleteReferralCode(referralCodeId: string) {
 }
 
 // Admin functions
-export async function adminCreateReferralCode() {
+export async function adminCreateReferralCode(userId?: string) {
     try {
         const user = await getLoggedInUser();
         if (!user) {
             return { error: "Not authorized" };
+        }
+
+        // Verify the user has superadmin privileges
+        if (user.labels && !user.labels.includes("SUPERADMIN")) {
+            return { error: "Only superadmins can create referral codes" };
         }
 
         const { databases } = await createAdminClient();
@@ -219,13 +232,16 @@ export async function adminCreateReferralCode() {
             }
         }
 
+        // Use the provided userId if available, otherwise use the current user's ID
+        const ownerUserId = userId || user.$id;
+
         const newReferralCode = await databases.createDocument(
             DATABASE_ID,
             REFERRAL_CODES_COLLECTION_ID,
             "unique()",
             {
                 code: code,
-                belongs_to: user.$id,
+                belongs_to: ownerUserId,
             }
         );
 

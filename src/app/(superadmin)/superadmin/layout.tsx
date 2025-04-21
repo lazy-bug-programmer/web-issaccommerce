@@ -15,9 +15,9 @@ export default function AdminLayout({
 
   const navItems = [
     { path: "/superadmin", label: "Dashboard" },
-    { path: "/superadmin/referral_code", label: "Referral Code" },
+    { path: "/superadmin/admin", label: "Admin" },
     { path: "/superadmin/seller", label: "Seller" },
-    { path: "/superadmin/seller_withdrawal", label: "Seller Withdrawal" },
+    { path: "/superadmin/withdrawal", label: "Withdrawal" },
     { path: "/superadmin/product", label: "Product" },
     { path: "/superadmin/task_settings", label: "Task Settings" },
   ];

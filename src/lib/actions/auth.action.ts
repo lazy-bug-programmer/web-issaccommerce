@@ -1,8 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use server";
 
 import {
   createAdminClient,
   createSessionClient,
+  getLoggedInUser,
 } from "@/lib/appwrite/server";
 import { uuidv4 } from "@/lib/guid";
 import { cookies } from "next/headers";
@@ -12,25 +14,37 @@ export async function signUpUser(
   name: string,
   phone: string,
   password: string,
-  confirmPassword: string
+  confirmPassword: string,
+  referralCode?: string
 ) {
   if (password !== confirmPassword) {
     return { error: "Passwords do not match" };
   }
 
+  const userId = uuidv4();
+
   try {
     const client = await createAdminClient();
-    const userId = uuidv4();
+    const user = await client.account.create(
+      userId,
+      `${userId}@web.com`, // using phone as the email/unique identifier
+      password,
+      name
+    );
 
-    // Create the user account
-    const user = await client.account.create(userId, userId + '@web.com', password, name);
-
-    // Update the user to include phone number
+    // Update the user labels
     await client.users.updatePhone(user.$id, "+6" + phone);
-    await client.users.updateLabels(user.$id, ['CUSTOMER']);
+    await client.users.updateLabels(user.$id, ["CUSTOMER"]);
 
-    return { message: "Account created successfully", user_id: userId };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
+    // If referral code provided, store it in user preferences
+    if (referralCode) {
+      await client.users.updatePrefs(user.$id, {
+        referralCode: referralCode
+      });
+    }
+
+    return { message: "Account created successfully", user_id: user.$id };
   } catch (err: any) {
     if (err) {
       switch (err.type) {
@@ -38,6 +52,7 @@ export async function signUpUser(
           return { error: "User already exists" };
       }
     }
+    console.error("Sign up error:", err);
     return { error: "Create account failed" };
   }
 }
@@ -144,5 +159,46 @@ export async function updateUserPassword(
       success: false,
       error: "Failed to update password"
     };
+  }
+}
+
+
+/**
+ * Get the current user's preferences
+ */
+export async function getUserPrefs() {
+  try {
+    const user = await getLoggedInUser();
+    if (!user) {
+      return { error: "User not authenticated" };
+    }
+
+    return {
+      data: user.prefs || {}
+    };
+  } catch (error: any) {
+    console.error("Error getting user preferences:", error);
+    return { error: error.message || "Failed to get user preferences" };
+  }
+}
+
+/**
+ * Update the current user's preferences
+ */
+export async function updateUserPrefs(prefs: Record<string, any>) {
+  try {
+    const user = await getLoggedInUser();
+    if (!user) {
+      return { error: "User not authenticated" };
+    }
+
+    const { account } = await createAdminClient();
+
+    const updatedPrefs = await account.updatePrefs(prefs);
+
+    return { data: updatedPrefs };
+  } catch (error: any) {
+    console.error("Error updating user preferences:", error);
+    return { error: error.message || "Failed to update user preferences" };
   }
 }

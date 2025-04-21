@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
-import { Users, DollarSign, Gift, Package, Settings } from "lucide-react";
+import { Users, DollarSign, Package, Settings } from "lucide-react";
 
 export default function AdminDashboard() {
   return (
@@ -12,18 +12,18 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-        <Link href="/superadmin/referral_code" className="block h-full">
+        <Link href="/superadmin/admin" className="block h-full">
           <Card className="h-full transition-all hover:shadow-md hover:border-primary/50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-xl font-semibold">
-                Referral Management
+                Admin Management
               </CardTitle>
-              <Gift className="h-6 w-6 text-primary" />
+              <Users className="h-6 w-6 text-primary" />
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground">
-                Create and manage referral codes, track conversions, and analyze
-                referral program performance.
+                Manage admin accounts, view admin statistics, and handle
+                admin-related operations.
               </p>
             </CardContent>
           </Card>
@@ -46,7 +46,7 @@ export default function AdminDashboard() {
           </Card>
         </Link>
 
-        <Link href="/superadmin/seller_withdrawal" className="block h-full">
+        <Link href="/superadmin/withdrawal" className="block h-full">
           <Card className="h-full transition-all hover:shadow-md hover:border-primary/50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-xl font-semibold">

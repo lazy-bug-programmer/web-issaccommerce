@@ -2,6 +2,7 @@
 "use server"
 
 import { createAdminClient, getLoggedInUser } from "@/lib/appwrite/server";
+import { Query } from "node-appwrite";
 
 const DATABASE_ID = 'Core';
 const TASK_SETTINGS_COLLECTION_ID = 'TaskSettings';
@@ -10,6 +11,7 @@ const TASK_SETTINGS_COLLECTION_ID = 'TaskSettings';
 export interface TaskItem {
     product_id: string;
     amount: string;
+    user_id?: string[] | string; // Added user_id property that can be a string array, string, or undefined
 }
 
 // Type definition for the task settings
@@ -66,6 +68,29 @@ export async function getTaskSettingsById(taskSettingsId: string) {
     } catch (error: any) {
         console.error("Error getting task settings:", error);
         return { error: error.message || "Failed to get task settings" };
+    }
+}
+
+// Get task settings by admin ID - to find admin-specific settings
+export async function getTaskSettingsByAdminId(adminId: string) {
+    try {
+        const { databases } = await createClient();
+
+        // Query for task settings where user_id equals the admin ID
+        const adminTaskSettings = await databases.listDocuments(
+            DATABASE_ID,
+            TASK_SETTINGS_COLLECTION_ID,
+            [Query.equal("user_id", adminId)]
+        );
+
+        if (adminTaskSettings.total > 0) {
+            return { data: adminTaskSettings.documents[0] };
+        } else {
+            return { error: "No task settings found for this admin" };
+        }
+    } catch (error: any) {
+        console.error("Error fetching admin task settings:", error);
+        return { error: error.message || "Failed to fetch admin task settings" };
     }
 }
 
@@ -183,4 +208,143 @@ export async function getEmptyTaskSettings(): Promise<string> {
     }
 
     return JSON.stringify(emptyTasks);
+}
+
+// Get admin task settings (default task settings)
+export async function getAdminTaskSettings() {
+    try {
+        const { databases } = await createClient();
+
+        // We use a fixed ID "task-settings" for the default admin task settings
+        try {
+            const taskSettings = await databases.getDocument(
+                DATABASE_ID,
+                TASK_SETTINGS_COLLECTION_ID,
+                "task-settings"
+            );
+            return { data: taskSettings };
+        } catch (error) {
+            console.error("Admin task settings not found:", error);
+
+            // Return empty settings if no admin settings exist
+            return {
+                data: {
+                    $id: "task-settings",
+                    settings: await getEmptyTaskSettings()
+                }
+            };
+        }
+    } catch (error: any) {
+        console.error("Error getting admin task settings:", error);
+        return { error: error.message || "Failed to get admin task settings" };
+    }
+}
+
+// Get user-specific task settings
+export async function getUserTaskSettings() {
+    try {
+        const user = await getLoggedInUser();
+        if (!user) {
+            return { error: "Not authorized" };
+        }
+
+        const { databases } = await createClient();
+
+        // First, check if user has custom task settings
+        try {
+            const userTaskSettings = await databases.listDocuments(
+                DATABASE_ID,
+                TASK_SETTINGS_COLLECTION_ID,
+                [Query.equal("user_id", user.$id)]
+            );
+
+            if (userTaskSettings.total > 0) {
+                return { data: userTaskSettings.documents[0] };
+            }
+        } catch (error) {
+            console.error("Error checking for user task settings:", error);
+        }
+
+        // If the user doesn't have their own task settings, create one with empty settings
+        try {
+            const emptySettings = await getEmptyTaskSettings();
+
+            const newTaskSettings = await databases.createDocument(
+                DATABASE_ID,
+                TASK_SETTINGS_COLLECTION_ID,
+                "unique()",
+                {
+                    settings: emptySettings,
+                    user_id: user.$id
+                }
+            );
+
+            return { data: newTaskSettings };
+        } catch (createError) {
+            console.error("Error creating user task settings:", createError);
+            return { error: "Failed to create task settings for user" };
+        }
+    } catch (error: any) {
+        console.error("Error getting user task settings:", error);
+        return { error: error.message || "Failed to get user task settings" };
+    }
+}
+
+// Get all sellers for task assignment (admin only function)
+export async function getAllSellersForTaskAssignment() {
+    try {
+        const user = await getLoggedInUser();
+        if (!user) {
+            return { error: "Not authorized" };
+        }
+
+        // Check if user is admin
+        const isAdmin = user.labels && (
+            user.labels.includes("ADMIN") ||
+            user.labels.includes("SUPERADMIN")
+        );
+
+        if (!isAdmin) {
+            return { error: "Only admins can access seller list" };
+        }
+
+        const { users } = await createAdminClient();
+
+        // Get all users with CUSTOMER label
+        const sellers = await users.list([
+            Query.contains("labels", "CUSTOMER"),
+            Query.limit(100)
+        ]);
+
+        return {
+            data: sellers.users.map(user => ({
+                $id: user.$id,
+                name: user.name,
+                email: user.email
+            }))
+        };
+    } catch (error: any) {
+        console.error("Error getting sellers for task assignment:", error);
+        return { error: error.message || "Failed to get sellers" };
+    }
+}
+
+// Check if current user is admin
+export async function isCurrentUserAdmin() {
+    try {
+        const user = await getLoggedInUser();
+        if (!user) {
+            return { isAdmin: false, error: "Not authenticated" };
+        }
+
+        const isAdmin = user.labels && (
+            user.labels.includes("ADMIN") ||
+            user.labels.includes("SUPERADMIN")
+        );
+
+        return { isAdmin };
+    } catch (error: any) {
+        console.error("Error checking admin status:", error);
+        return { isAdmin: false, error: error.message || "Failed to check admin status" };
+    }
 }
