@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
-import { Gift, Settings } from "lucide-react";
+import { DollarSign, Gift, Settings, Users } from "lucide-react";
 
 export default function AdminDashboard() {
   return (
@@ -12,6 +12,39 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+        <Link href="/superadmin/seller" className="block h-full">
+          <Card className="h-full transition-all hover:shadow-md hover:border-primary/50">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-xl font-semibold">
+                Seller Management
+              </CardTitle>
+              <Users className="h-6 w-6 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">
+                Manage seller accounts, view seller statistics, and handle
+                seller-related operations.
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/superadmin/withdrawal" className="block h-full">
+          <Card className="h-full transition-all hover:shadow-md hover:border-primary/50">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-xl font-semibold">
+                Withdrawal Management
+              </CardTitle>
+              <DollarSign className="h-6 w-6 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">
+                Manage withdrawal requests.
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+
         <Link href="/admin/referral_code" className="block h-full">
           <Card className="h-full transition-all hover:shadow-md hover:border-primary/50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

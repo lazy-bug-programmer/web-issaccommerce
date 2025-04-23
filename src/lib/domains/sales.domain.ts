@@ -5,7 +5,7 @@ export interface Sale {
     number_of_rating: number;
     total_earning: number;
     trial_bonus: number;
-    trial_bonus_date: Date;
+    trial_bonus_date: Date | string;
     today_bonus: number;
-    today_bonus_date: Date;
+    today_bonus_date: Date | string;
 }

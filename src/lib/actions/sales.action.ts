@@ -149,6 +149,7 @@ export async function updateSale(saleId: string, updates: Partial<Sale>) {
             return { error: "Not authorized" };
         }
 
+        // No need to check if user owns the sale - superadmin can update any sale
         const { databases } = await createAdminClient();
 
         const updatedSale = await databases.updateDocument(

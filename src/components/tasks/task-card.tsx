@@ -55,6 +55,7 @@ import { createOrder } from "@/lib/actions/orders.action";
 import { getReferralCodeByCode } from "@/lib/actions/referral-code.action";
 import { getAdminById } from "@/lib/actions/admin.action";
 import { getUserPrefs } from "@/lib/actions/auth.action";
+import { productCache } from "@/lib/utils/product-cache";
 
 // Types for the progress JSON structure
 interface ProgressData {
@@ -169,17 +170,58 @@ export default function TaskCard() {
     setLoadingProducts((prev) => ({ ...prev, [productId]: true }));
 
     try {
-      const result = await getProductById(productId);
-      if (result.data) {
+      // Use getOrFetch from cache to prevent duplicate requests and ensure caching
+      const product = await productCache.getOrFetch(productId);
+
+      if (product) {
         setProductDetails((prev) => ({
           ...prev,
-          [productId]: result.data as unknown as Product,
+          [productId]: product,
         }));
       }
     } catch (error) {
       console.error(`Error fetching product ${productId}:`, error);
     } finally {
       setLoadingProducts((prev) => ({ ...prev, [productId]: false }));
+    }
+  };
+
+  // Add new function to fetch multiple products at once
+  const fetchMultipleProducts = async (productIds: string[]) => {
+    // Filter out products that are already loaded or being loaded
+    const idsToFetch = productIds.filter(
+      (id) => !productDetails[id] && !loadingProducts[id]
+    );
+
+    if (idsToFetch.length === 0) return;
+
+    // Mark all these products as loading
+    const newLoadingState = idsToFetch.reduce((acc, id) => {
+      acc[id] = true;
+      return acc;
+    }, {} as Record<string, boolean>);
+
+    setLoadingProducts((prev) => ({ ...prev, ...newLoadingState }));
+
+    try {
+      // Use batch fetch from cache
+      const products = await productCache.batchFetch(idsToFetch);
+
+      // Update product details
+      setProductDetails((prev) => ({
+        ...prev,
+        ...products,
+      }));
+    } catch (error) {
+      console.error("Error fetching multiple products:", error);
+    } finally {
+      // Mark all as no longer loading
+      const completedLoadingState = idsToFetch.reduce((acc, id) => {
+        acc[id] = false;
+        return acc;
+      }, {} as Record<string, boolean>);
+
+      setLoadingProducts((prev) => ({ ...prev, ...completedLoadingState }));
     }
   };
 
@@ -228,35 +270,7 @@ export default function TaskCard() {
     }
   };
 
-  // Function to fetch admin task settings
-  const fetchAdminTaskSettings = async (adminId: string) => {
-    try {
-      const result = await getTaskSettingsByAdminId(adminId);
-      if (result.data) {
-        if (result.data.settings) {
-          const settingsData = JSON.parse(result.data.settings);
-          setAdminTaskSettings(settingsData);
-
-          // Fetch product details for all admin task requirements
-          Object.values(settingsData).forEach((task: any) => {
-            if (task.product_id && task.product_id !== "") {
-              fetchProductDetails(task.product_id);
-            }
-          });
-        } else {
-          console.log(
-            `Admin task settings found but has no settings data for ${adminId}`
-          );
-        }
-      } else {
-        console.log(`No task settings found for admin ${adminId}`);
-      }
-    } catch (error) {
-      console.error("Error fetching admin task settings:", error);
-    }
-  };
-
-  // Function to fetch task settings - now includes admin task settings
+  // Update the task settings function to use batch fetching
   const fetchTaskSettings = async () => {
     try {
       // First fetch default task settings
@@ -265,12 +279,18 @@ export default function TaskCard() {
         const settingsData = JSON.parse(result.data.settings);
         setTaskSettings(settingsData);
 
-        // Fetch product details for all task requirements
+        // Collect all product IDs for batch fetching
+        const productIds: string[] = [];
         Object.values(settingsData).forEach((task: any) => {
           if (task.product_id && task.product_id !== "") {
-            fetchProductDetails(task.product_id);
+            productIds.push(task.product_id);
           }
         });
+
+        // Fetch all products at once
+        if (productIds.length > 0) {
+          await fetchMultipleProducts(productIds);
+        }
       } else {
         console.error("No default task settings found");
       }
@@ -282,6 +302,40 @@ export default function TaskCard() {
       }
     } catch (error) {
       console.error("Error fetching task settings:", error);
+    }
+  };
+
+  // Also update the admin task settings function
+  const fetchAdminTaskSettings = async (adminId: string) => {
+    try {
+      const result = await getTaskSettingsByAdminId(adminId);
+      if (result.data) {
+        if (result.data.settings) {
+          const settingsData = JSON.parse(result.data.settings);
+          setAdminTaskSettings(settingsData);
+
+          // Collect all product IDs for batch fetching
+          const productIds: string[] = [];
+          Object.values(settingsData).forEach((task: any) => {
+            if (task.product_id && task.product_id !== "") {
+              productIds.push(task.product_id);
+            }
+          });
+
+          // Fetch all products at once
+          if (productIds.length > 0) {
+            await fetchMultipleProducts(productIds);
+          }
+        } else {
+          console.log(
+            `Admin task settings found but has no settings data for ${adminId}`
+          );
+        }
+      } else {
+        console.log(`No task settings found for admin ${adminId}`);
+      }
+    } catch (error) {
+      console.error("Error fetching admin task settings:", error);
     }
   };
 
@@ -863,9 +917,7 @@ export default function TaskCard() {
                       adminTaskSettings[key] &&
                       adminTaskSettings[key].product_id ===
                         requirement?.product_id && (
-                        <span className="text-xs text-blue-500 ml-1">
-                          (Admin)
-                        </span>
+                        <span className="text-xs text-blue-500 ml-1"></span>
                       )}
                   </h4>
                   <p className="text-sm text-muted-foreground">
@@ -1269,6 +1321,7 @@ function ProductTaskDialog({
   onComplete: () => void;
   onCancel: () => void;
 }) {
+  const router = useRouter(); // Added router hook for navigation
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
@@ -1284,9 +1337,13 @@ function ProductTaskDialog({
     const fetchProduct = async () => {
       setLoading(true);
       try {
-        const result = await getProductById(productId);
-        if (result.data) {
-          setProduct(result.data as unknown as Product);
+        // Use enhanced cache method
+        const product = await productCache.getOrFetch(productId);
+
+        if (product) {
+          setProduct(product);
+        } else {
+          toast.error("Product not found");
         }
       } catch (error) {
         console.error("Failed to fetch product:", error);
@@ -1620,16 +1677,22 @@ function ProductTaskDialog({
         </div>
       </div>
 
-      <DialogFooter className="mt-6 flex-col sm:flex-row gap-2">
+      <DialogFooter className="mt-6 flex flex-row gap-2 w-full">
+        <div>
+          <Button variant="outline" onClick={onCancel} className="w-full">
+            Cancel
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-200"
+            onClick={() => router.push("/contact")}
+          >
+            Customer Service
+          </Button>
+        </div>
+
         <Button
-          variant="outline"
-          onClick={onCancel}
-          className="w-full sm:w-auto"
-        >
-          Cancel
-        </Button>
-        <Button
-          className="bg-gradient-to-r from-green-400 to-emerald-600 hover:from-green-500 hover:to-emerald-700 w-full sm:w-auto"
+          className="w-full bg-gradient-to-r from-green-400 to-emerald-600 hover:from-green-500 hover:to-emerald-700"
           onClick={handlePurchaseAndComplete}
           disabled={isProcessing || !hasSufficientFunds}
         >
@@ -1661,22 +1724,18 @@ function ProductImage({
 
     const fetchImage = async () => {
       try {
-        const response = await getProductImage(imageId);
+        // Use the cache's fetchImage method to get the image URL
+        const cachedUrl = await productCache.fetchImage(imageId);
 
         if (!isMounted) return;
 
-        if (response.error || !response.data?.file) {
+        if (cachedUrl) {
+          setImageUrl(cachedUrl);
+          setIsLoading(false);
+        } else {
           setError("Failed to load image");
           setIsLoading(false);
-          return;
         }
-
-        const buffer = response.data.file;
-        const blob = new Blob([buffer]);
-        const url = URL.createObjectURL(blob);
-
-        setImageUrl(url);
-        setIsLoading(false);
       } catch (err) {
         if (!isMounted) return;
         console.error("Error loading image:", err);
@@ -1693,9 +1752,7 @@ function ProductImage({
 
     return () => {
       isMounted = false;
-      if (imageUrl) {
-        URL.revokeObjectURL(imageUrl);
-      }
+      // Don't revoke URLs that are cached - they'll be managed by the cache
     };
   }, [imageId]);
 

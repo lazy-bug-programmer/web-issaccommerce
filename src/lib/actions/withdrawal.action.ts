@@ -242,6 +242,79 @@ export async function adminDeleteWithdrawal(withdrawalId: string) {
     }
 }
 
+// New function to get withdrawals by admin referral code
+export async function getWithdrawalsByAdmin(adminId: string, page = 0, limit = 10, keyword = "") {
+    try {
+        const { databases, users } = await createAdminClient();
+
+        // First get all sellers
+        const usersResponse = await users.list();
+
+        // Get admin's referral codes
+        const referralCodesResponse = await databases.listDocuments(
+            'Core',
+            'ReferralCode',
+            [Query.equal("belongs_to", adminId)]
+        );
+
+        if (referralCodesResponse.total === 0) {
+            return { users: [], total: 0 };
+        }
+
+        // Extract all referral codes that belong to this admin
+        const adminReferralCodes = referralCodesResponse.documents.map(doc => doc.code);
+
+        if (!Array.isArray(adminReferralCodes) || adminReferralCodes.length === 0) {
+            return {
+                withdrawals: [],
+                total: 0
+            };
+        }
+
+        // Filter users who have one of the admin's referral codes in their preferences
+        const associatedSellers = usersResponse.users.filter(user => {
+            const prefs = user.prefs || {};
+            return prefs.referralCode && adminReferralCodes.includes(prefs.referralCode);
+        });
+
+        if (associatedSellers.length === 0) {
+            return {
+                withdrawals: [],
+                total: 0
+            };
+        }
+
+        // Get user IDs for the query
+        const userIds = associatedSellers.map(user => user.$id);
+
+        // Create queries for withdrawals
+        const queries = [
+            Query.limit(limit),
+            Query.offset(page * limit),
+            Query.orderDesc("requested_at"),
+            Query.equal("user_id", userIds) // Filter by these user IDs
+        ];
+
+        if (keyword) {
+            queries.push(Query.search("user_id", keyword));
+        }
+
+        const withdrawals = await databases.listDocuments(
+            DATABASE_ID,
+            WITHDRAWALS_COLLECTION_ID,
+            queries
+        );
+
+        return {
+            withdrawals: withdrawals.documents,
+            total: withdrawals.total
+        };
+    } catch (error: any) {
+        console.error("Error getting withdrawals by admin:", error);
+        return { error: error.message || "Failed to get withdrawals", total: 0 };
+    }
+}
+
 // Helper function to create a regular client
 async function createClient() {
     const { databases } = await createAdminClient();

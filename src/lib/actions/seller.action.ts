@@ -164,7 +164,7 @@ export async function getSellersByReferralCode(referralCode: string) {
         // Filter users who have the referral code in their preferences
         const sellers = response.users.filter(user => {
             const prefs = user.prefs || {};
-            return prefs.referralCode === referralCode;
+            return prefs.referral_code === referralCode;
         });
 
         return {
@@ -181,5 +181,70 @@ export async function getSellersByReferralCode(referralCode: string) {
     } catch (error: any) {
         console.error("Error fetching sellers by referral code:", error);
         return { error: "Failed to fetch sellers", sellers: [] };
+    }
+}
+
+export async function getSellersByAdmin(
+    adminId: string,
+    pageNumber: number = 0,
+    pageSize: number = 10,
+    keyword: string = ""
+) {
+    try {
+        const client = await createAdminClient();
+
+        // First get the admin's referral codes
+        const { databases } = client;
+        const referralCodesResponse = await databases.listDocuments(
+            'Core',
+            'ReferralCode',
+            [Query.equal("belongs_to", adminId)]
+        );
+
+        if (referralCodesResponse.total === 0) {
+            return { users: [], total: 0 };
+        }
+
+        // Extract all referral codes that belong to this admin
+        const adminReferralCodes = referralCodesResponse.documents.map(doc => doc.code);
+
+        // Get all users with CUSTOMER label
+        const queries = [
+            Query.contains("labels", "CUSTOMER"),
+            Query.limit(100), // Get more to filter locally
+        ];
+
+        if (keyword.trim()) {
+            queries.push(Query.contains("name", keyword));
+        }
+
+        const response = await client.users.list(queries);
+
+        // Filter users who have one of the admin's referral codes in their preferences
+        const associatedSellers = response.users.filter(user => {
+            console.log(user.prefs)
+            const prefs = user.prefs || {};
+            return prefs.referralCode && adminReferralCodes.includes(prefs.referralCode);
+        });
+
+        // Apply pagination manually after filtering
+        const startIndex = pageNumber * pageSize;
+        const paginatedSellers = associatedSellers.slice(startIndex, startIndex + pageSize);
+
+        return {
+            users: paginatedSellers.map(user => ({
+                $id: user.$id,
+                name: user.name,
+                email: user.email,
+                status: user.status,
+                phone: user.phone || "",
+                labels: user.labels,
+                $createdAt: user.$createdAt,
+            })),
+            total: associatedSellers.length
+        };
+    } catch (error: any) {
+        console.error("Error fetching sellers by admin:", error);
+        return { error: "Failed to fetch sellers", users: [], total: 0 };
     }
 }

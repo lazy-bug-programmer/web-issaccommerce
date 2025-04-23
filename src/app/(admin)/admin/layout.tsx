@@ -15,6 +15,8 @@ export default function AdminLayout({
 
   const navItems = [
     { path: "/admin", label: "Dashboard" },
+    { path: "/admin/seller", label: "Seller" },
+    { path: "/admin/withdrawal", label: "Withdrawal" },
     { path: "/admin/referral_code", label: "Referral Code" },
     { path: "/admin/task_settings", label: "Task Settings" },
   ];

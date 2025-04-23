@@ -120,40 +120,6 @@ export default function ProductsPage() {
     fetchProducts();
   }, [page]);
 
-  useEffect(() => {
-    products.forEach((product) => {
-      if (product.image_urls && product.image_urls.length > 0) {
-        product.image_urls.forEach((imageUrl) => {
-          if (!imageUrl.startsWith("http") && !productImages[imageUrl]) {
-            fetchProductImage(imageUrl);
-          }
-        });
-      }
-    });
-  }, [products, productImages]);
-
-  async function fetchProductImage(imageId: string) {
-    try {
-      const response = await getProductImage(imageId);
-      if (response.error) {
-        console.error("Error loading image:", response.error);
-        return;
-      }
-
-      if (response.data?.file) {
-        const blob = new Blob([response.data.file]);
-        const url = URL.createObjectURL(blob);
-
-        setProductImages((prev) => ({
-          ...prev,
-          [imageId]: url,
-        }));
-      }
-    } catch (error) {
-      console.error("Failed to load image:", error);
-    }
-  }
-
   async function fetchProducts() {
     setIsLoading(true);
     try {
@@ -265,7 +231,7 @@ export default function ProductsPage() {
     }
   }
 
-  function handleEdit(product: Product) {
+  async function handleEdit(product: Product) {
     setIsEditing(true);
     setCurrentProduct(product);
     form.reset({
@@ -277,18 +243,61 @@ export default function ProductsPage() {
       discount_rate: product.discount_rate,
     });
 
-    const previews: string[] = [];
+    // Clear previous previews
+    setImagePreview([]);
+
     if (product.image_urls && product.image_urls.length > 0) {
-      product.image_urls.forEach((url) => {
+      // Create an array to hold all image preview promises
+      const imagePromises = product.image_urls.map(async (url) => {
         if (url.startsWith("http")) {
-          previews.push(url);
-        } else if (productImages[url]) {
-          previews.push(productImages[url]);
+          return url;
+        } else {
+          // Check if we already have this image in cache
+          if (!productImages[url]) {
+            try {
+              const response = await getProductImage(url);
+              if (response.error) {
+                console.error("Error loading image:", response.error);
+                return null;
+              }
+
+              if (response.data?.file) {
+                const blob = new Blob([response.data.file]);
+                const imageUrl = URL.createObjectURL(blob);
+
+                // Update the product images cache
+                setProductImages((prev) => ({
+                  ...prev,
+                  [url]: imageUrl,
+                }));
+
+                return imageUrl;
+              }
+              return null;
+            } catch (error) {
+              console.error("Failed to load image:", error);
+              return null;
+            }
+          } else {
+            // Use cached image
+            return productImages[url];
+          }
         }
       });
-    }
-    setImagePreview(previews);
 
+      // Wait for all image promises to resolve
+      const resolvedImages = await Promise.all(imagePromises);
+
+      // Filter out null values (failed image loads)
+      const validImages = resolvedImages.filter(
+        (url) => url !== null
+      ) as string[];
+
+      // Set the image previews
+      setImagePreview(validImages);
+    }
+
+    // Open the dialog
     setOpen(true);
   }
 
@@ -385,24 +394,6 @@ export default function ProductsPage() {
   const calculateFinalPrice = (price: number, discountRate: number): string => {
     const finalPrice = price * (1 - discountRate / 100);
     return finalPrice.toFixed(2);
-  };
-
-  const getMainImageSource = (product: Product) => {
-    if (!product.image_urls || product.image_urls.length === 0) {
-      return "/100x100.svg";
-    }
-
-    const firstImage = product.image_urls[0];
-
-    if (firstImage.startsWith("http")) {
-      return firstImage;
-    }
-
-    if (productImages[firstImage]) {
-      return productImages[firstImage];
-    }
-
-    return "/100x100.svg";
   };
 
   return (
@@ -606,7 +597,6 @@ export default function ProductsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[80px]">Image</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Description</TableHead>
                   <TableHead className="text-right">Price</TableHead>
@@ -628,13 +618,6 @@ export default function ProductsPage() {
                 ) : (
                   products.map((product) => (
                     <TableRow key={product.$id}>
-                      <TableCell>
-                        <img
-                          src={getMainImageSource(product)}
-                          alt={product.name}
-                          className="h-10 w-10 rounded-md object-cover"
-                        />
-                      </TableCell>
                       <TableCell className="font-medium">
                         {product.name}
                       </TableCell>
