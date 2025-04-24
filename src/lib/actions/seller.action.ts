@@ -44,7 +44,7 @@ export async function getAllSeller(
 
         const queries = [
             Query.contains("labels", "CUSTOMER"),
-            Query.limit(pageSize),
+            Query.limit(10000),
             Query.offset(pageNumber * pageSize),
         ];
 
@@ -156,7 +156,7 @@ export async function getSellersByReferralCode(referralCode: string) {
         // First get all users with CUSTOMER label
         const queries = [
             Query.contains("labels", "CUSTOMER"),
-            Query.limit(100),
+            Query.limit(10000),
         ];
 
         const response = await client.users.list(queries);
@@ -187,7 +187,7 @@ export async function getSellersByReferralCode(referralCode: string) {
 export async function getSellersByAdmin(
     adminId: string,
     pageNumber: number = 0,
-    pageSize: number = 10,
+    pageSize: number = 10000,
     keyword: string = ""
 ) {
     try {
@@ -211,7 +211,7 @@ export async function getSellersByAdmin(
         // Get all users with CUSTOMER label
         const queries = [
             Query.contains("labels", "CUSTOMER"),
-            Query.limit(100), // Get more to filter locally
+            Query.limit(10000), // Increased to retrieve more records
         ];
 
         if (keyword.trim()) {

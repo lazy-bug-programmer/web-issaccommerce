@@ -41,7 +41,7 @@ export async function createOrder(order: Omit<Orders, "$id" | "user_id" | "order
 }
 
 // READ
-export async function getOrders(limit = 10) {
+export async function getOrders(limit = 10000) {
     try {
         const { databases } = await createClient();
 
@@ -222,7 +222,7 @@ export async function deleteOrder(orderId: string) {
 }
 
 // Admin operations
-export async function adminGetAllOrders(limit = 100) {
+export async function adminGetAllOrders(limit = 10000) {
     try {
         const { databases } = await createAdminClient();
 

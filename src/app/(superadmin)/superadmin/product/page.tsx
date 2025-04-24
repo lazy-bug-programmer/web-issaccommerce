@@ -93,6 +93,7 @@ export default function ProductsPage() {
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalProducts, setTotalProducts] = useState(0); // New state to track total products
   const [imagePreview, setImagePreview] = useState<string[]>([]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -137,6 +138,7 @@ export default function ProductsPage() {
         );
         setProducts(productData);
         setTotalPages(Math.ceil((response.total || 0) / limit));
+        setTotalProducts(response.total || 0); // Store the total count
       }
     } catch {
       toast.error("Failed to fetch products");
@@ -399,9 +401,16 @@ export default function ProductsPage() {
   return (
     <div className="flex-1 space-y-4 p-4 sm:p-6 lg:p-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
-        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
-          Products
-        </h2>
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
+            Products
+          </h2>
+          {!isLoading && (
+            <p className="text-muted-foreground mt-1">
+              Total products in database: {totalProducts}
+            </p>
+          )}
+        </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button onClick={handleAddNew}>

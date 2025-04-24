@@ -45,7 +45,7 @@ export async function createWithdrawal(amount: number = 0) {
 }
 
 // READ
-export async function getWithdrawals(limit = 10, offset = 0) {
+export async function getWithdrawals(limit = 10000, offset = 0) {
     try {
         const { databases } = await createClient();
 
@@ -177,7 +177,7 @@ export async function deleteWithdrawal(withdrawalId: string) {
 }
 
 // Admin operations
-export async function adminGetAllWithdrawals(page = 0, limit = 10, keyword = "") {
+export async function adminGetAllWithdrawals(page = 0, limit = 10000, keyword = "") {
     try {
         const { databases } = await createAdminClient();
 
@@ -243,7 +243,7 @@ export async function adminDeleteWithdrawal(withdrawalId: string) {
 }
 
 // New function to get withdrawals by admin referral code
-export async function getWithdrawalsByAdmin(adminId: string, page = 0, limit = 10, keyword = "") {
+export async function getWithdrawalsByAdmin(adminId: string, page = 0, limit = 10000, keyword = "") {
     try {
         const { databases, users } = await createAdminClient();
 

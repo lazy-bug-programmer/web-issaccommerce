@@ -20,6 +20,7 @@ export default function AdminLayout({
     { path: "/superadmin/withdrawal", label: "Withdrawal" },
     { path: "/superadmin/product", label: "Product" },
     { path: "/superadmin/task_settings", label: "Task Settings" },
+    { path: "/superadmin/social_settings", label: "Social Settings" },
   ];
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);

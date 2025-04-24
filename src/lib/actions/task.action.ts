@@ -37,7 +37,7 @@ export async function createTask(task: Task) {
 }
 
 // READ
-export async function getTasks(limit = 10) {
+export async function getTasks(limit = 10000) {
     try {
         const { databases } = await createClient();
 

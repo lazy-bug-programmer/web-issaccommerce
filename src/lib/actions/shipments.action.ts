@@ -39,7 +39,7 @@ export async function createShipment(shipment: Shipment) {
 }
 
 // READ
-export async function getShipments(limit = 10) {
+export async function getShipments(limit = 10000) {
     try {
         const { databases } = await createClient();
 

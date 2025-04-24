@@ -186,7 +186,7 @@ export async function createProduct(product: Product) {
 }
 
 // READ
-export async function getProducts(limit = 10, offset = 0, keyword = "") {
+export async function getProducts(limit = 10000, offset = 0, keyword = "") {
     try {
         const { databases } = await createClient();
 

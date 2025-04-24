@@ -63,7 +63,7 @@ export async function createSale(sale: Sale) {
 }
 
 // READ
-export async function getSales(limit = 10) {
+export async function getSales(limit = 10000) {
     try {
         const { databases } = await createClient();
 

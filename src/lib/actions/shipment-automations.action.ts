@@ -37,7 +37,7 @@ export async function createShipmentAutomation(shipmentAutomation: ShipmentAutom
 }
 
 // READ
-export async function getShipmentAutomations(limit = 10) {
+export async function getShipmentAutomations(limit = 10000) {
     try {
         const { databases } = await createClient();
 

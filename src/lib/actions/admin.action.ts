@@ -6,7 +6,7 @@ import { Query } from "node-appwrite";
 import { uuidv4 } from "@/lib/guid";
 
 // Get a list of admin users
-export async function getAdmins(limit = 10, offset = 0) {
+export async function getAdmins(limit = 10000, offset = 0) {
     try {
         const user = await getLoggedInUser();
         if (!user) {

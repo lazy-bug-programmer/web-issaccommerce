@@ -19,6 +19,7 @@ export default function AdminLayout({
     { path: "/admin/withdrawal", label: "Withdrawal" },
     { path: "/admin/referral_code", label: "Referral Code" },
     { path: "/admin/task_settings", label: "Task Settings" },
+    { path: "/admin/social_settings", label: "Social Settings" },
   ];
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);

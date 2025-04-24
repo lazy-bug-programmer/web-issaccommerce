@@ -94,6 +94,22 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
         </Link>
+
+        <Link href="/superadmin/social_settings" className="block h-full">
+          <Card className="h-full transition-all hover:shadow-md hover:border-primary/50">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-xl font-semibold">
+                Social Settings
+              </CardTitle>
+              <Settings className="h-6 w-6 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">
+                Configure and manage social-related settings and parameters.
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
     </div>
   );

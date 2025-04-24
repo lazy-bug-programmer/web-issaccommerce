@@ -59,7 +59,7 @@ export async function createReferralCode() {
 }
 
 // READ
-export async function getReferralCodes(limit = 10, offset = 0, userId?: string) {
+export async function getReferralCodes(limit = 10000, offset = 0, userId?: string) {
     try {
         const user = await getLoggedInUser();
         if (!user) {

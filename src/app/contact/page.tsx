@@ -1,8 +1,42 @@
+"use client";
+
 import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { getSocialSettings } from "@/lib/actions/social-settings.action";
+import { SocialSettings } from "@/lib/domains/social-settings.domain";
 
 export default function ContactPage() {
-  const whatsappNumber = "5551234567890";
-  const telegramUsername = "yourusername";
+  const router = useRouter();
+  const [socialLinks, setSocialLinks] = useState<SocialSettings>({
+    whatsapp_link: "",
+    telegram_link: "",
+  });
+
+  useEffect(() => {
+    const fetchSocialSettings = async () => {
+      try {
+        const response = await getSocialSettings();
+        if (response.data) {
+          setSocialLinks({
+            whatsapp_link: response.data.whatsapp_link,
+            telegram_link: response.data.telegram_link,
+          });
+        }
+      } catch (error) {
+        console.error("Failed to fetch social settings:", error);
+      } finally {
+      }
+    };
+
+    fetchSocialSettings();
+  }, []);
+
+  const handleNavigate = (url: string) => {
+    if (url) {
+      router.push(("https://" + url).trim());
+    }
+  };
 
   return (
     <div className="py-16 px-4 min-h-[80vh]">
@@ -27,10 +61,8 @@ export default function ContactPage() {
 
             <div className="space-y-4">
               {/* WhatsApp Button */}
-              <a
-                href={`https://wa.me/${whatsappNumber}`}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                onClick={() => handleNavigate(socialLinks.whatsapp_link)}
                 className="flex items-center gap-4 p-4 border border-green-200 bg-white hover:bg-green-50 text-green-600 rounded-lg transition-all duration-300 w-full group"
               >
                 <div className="bg-green-100 p-3 rounded-full group-hover:bg-green-200 transition-colors">
@@ -48,13 +80,11 @@ export default function ContactPage() {
                     Chat with us instantly
                   </div>
                 </div>
-              </a>
+              </button>
 
               {/* Telegram Button */}
-              <a
-                href={`https://t.me/${telegramUsername}`}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                onClick={() => handleNavigate(socialLinks.telegram_link)}
                 className="flex items-center gap-4 p-4 border border-blue-200 bg-white hover:bg-blue-50 text-blue-600 rounded-lg transition-all duration-300 w-full group"
               >
                 <div className="bg-blue-100 p-3 rounded-full group-hover:bg-blue-200 transition-colors">
@@ -72,7 +102,7 @@ export default function ContactPage() {
                     Message us on Telegram
                   </div>
                 </div>
-              </a>
+              </button>
             </div>
 
             <p className="mt-8 text-sm text-gray-500 text-center">
