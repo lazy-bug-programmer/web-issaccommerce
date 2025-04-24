@@ -149,6 +149,86 @@ export async function getUserTasks() {
     }
 }
 
+// Fetch tasks for a specific user by ID (admin only)
+export async function getUserTasksById(userId: string) {
+    try {
+        const currentUser = await getLoggedInUser();
+        if (!currentUser) {
+            return { error: "Not authorized" };
+        }
+
+        // Check if the current user is an admin
+        const { databases } = await createAdminClient();
+
+        const tasks = await databases.listDocuments(
+            DATABASE_ID,
+            TASKS_COLLECTION_ID,
+            [Query.equal("user_id", userId)]
+        );
+
+        // If user has no tasks, create a default one with JSON progress structure
+        if (tasks.documents.length === 0) {
+            // Default progress structure with all tasks set to false
+            const defaultProgress = {
+                "task1": false,
+                "task2": false,
+                "task3": false,
+                "task4": false,
+                "task5": false,
+                "task6": false,
+                "task7": false,
+                "task8": false,
+                "task9": false,
+                "task10": false,
+                "task11": false,
+                "task12": false,
+                "task13": false,
+                "task14": false,
+                "task15": false,
+                "task16": false,
+                "task17": false,
+                "task18": false,
+                "task19": false,
+                "task20": false,
+                "task21": false,
+                "task22": false,
+                "task23": false,
+                "task24": false,
+                "task25": false,
+                "task26": false,
+                "task27": false,
+                "task28": false,
+                "task29": false,
+                "task30": false,
+                "task31": false,
+                "task32": false,
+                "task33": false,
+                "task34": false,
+                "task35": false,
+                "task36": false,
+            }
+
+            const newTask = await databases.createDocument(
+                DATABASE_ID,
+                TASKS_COLLECTION_ID,
+                "unique()",
+                {
+                    user_id: userId,
+                    progress: JSON.stringify(defaultProgress),
+                    last_edit: new Date().toISOString(), // Set the last_edit to now
+                }
+            );
+
+            return { data: [newTask] };
+        }
+
+        return { data: tasks.documents };
+    } catch (error: any) {
+        console.error("Error getting user tasks by ID:", error);
+        return { error: error.message || "Failed to get user tasks" };
+    }
+}
+
 // UPDATE
 export async function updateTask(taskId: string, updates: Partial<Task>) {
     try {
@@ -169,11 +249,13 @@ export async function updateTask(taskId: string, updates: Partial<Task>) {
         const now = new Date();
         const lastEdit = currentTask.last_edit ? new Date(currentTask.last_edit) : null;
 
-        // Check if last_edit is from a different day (or null)
-        const shouldResetProgress = !lastEdit ||
-            lastEdit.getDate() !== now.getDate() ||
-            lastEdit.getMonth() !== now.getMonth() ||
-            lastEdit.getFullYear() !== now.getFullYear();
+        // Check if last_edit is from a different day (or null) and allow_system_reset is true
+        const allowReset = currentTask.allow_system_reset !== false; // Default to true if not set
+        const shouldResetProgress = allowReset &&
+            (!lastEdit ||
+                lastEdit.getDate() !== now.getDate() ||
+                lastEdit.getMonth() !== now.getMonth() ||
+                lastEdit.getFullYear() !== now.getFullYear());
 
         // If should reset and we're not already resetting with this update
         if (shouldResetProgress && !updates.progress) {
@@ -297,11 +379,13 @@ export async function updateTaskProgress(taskId: string, progress: string) {
         const now = new Date();
         const lastEdit = currentTask.last_edit ? new Date(currentTask.last_edit) : null;
 
-        // Check if last_edit is from a different day (or null)
-        const shouldResetProgress = !lastEdit ||
-            lastEdit.getDate() !== now.getDate() ||
-            lastEdit.getMonth() !== now.getMonth() ||
-            lastEdit.getFullYear() !== now.getFullYear();
+        // Check if last_edit is from a different day (or null) and allow_system_reset is true
+        const allowReset = currentTask.allow_system_reset !== false; // Default to true if not set
+        const shouldResetProgress = allowReset &&
+            (!lastEdit ||
+                lastEdit.getDate() !== now.getDate() ||
+                lastEdit.getMonth() !== now.getMonth() ||
+                lastEdit.getFullYear() !== now.getFullYear());
 
         // If task hasn't been accessed today, reset progress instead of updating it
         const updatedProgress = shouldResetProgress ?

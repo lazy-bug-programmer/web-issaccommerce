@@ -117,6 +117,9 @@ export default function TaskCard() {
   const animationTimerRef = useRef<NodeJS.Timeout | null>(null);
   const dialogTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Add taskItemRefs to store references to task elements for scrolling
+  const taskItemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
   // Map to store task animations
   const taskAnimationsRef = useRef<Map<string, AnimationComponent>>(new Map());
 
@@ -438,7 +441,7 @@ export default function TaskCard() {
     });
   };
 
-  // Enhanced function to fetch tasks - modified to not reset automatically
+  // Enhanced function to fetch tasks - modified to check allow_system_reset
   const fetchTasks = async () => {
     setLoading(true);
     try {
@@ -446,7 +449,7 @@ export default function TaskCard() {
       if (result.data) {
         const taskData = result.data as unknown as Task[];
 
-        // Remove automatic task reset logic
+        // Set tasks without automatic task reset logic
         setTasks(taskData);
         assignAnimationsToTasks(taskData);
 
@@ -460,11 +463,57 @@ export default function TaskCard() {
 
         // Fetch user sales data
         await fetchUserSales();
+
+        // Schedule scrolling to first incomplete task after everything is loaded
+        setTimeout(() => scrollToFirstIncompleteTask(taskData), 500);
       }
     } catch (error) {
       console.error("Error fetching tasks:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Add function to scroll to the first incomplete task
+  const scrollToFirstIncompleteTask = (taskData: Task[]) => {
+    try {
+      // Process each task to find the first incomplete task
+      for (const task of taskData) {
+        if (!task.progress) continue;
+
+        const progressData: ProgressData = JSON.parse(task.progress);
+        const taskKeys = Object.keys(progressData).filter(
+          (k) => !k.startsWith("paywall")
+        );
+
+        // Find the first incomplete task that is available
+        for (const key of taskKeys) {
+          if (!progressData[key] && isTaskAvailable(key, progressData)) {
+            // Get the task element ref
+            const taskElementRef = taskItemRefs.current.get(
+              `${task.$id}-${key}`
+            );
+
+            if (taskElementRef) {
+              // Scroll to the element with smooth behavior
+              taskElementRef.scrollIntoView({
+                behavior: "smooth",
+                block: "center",
+              });
+
+              // Highlight the task briefly
+              taskElementRef.classList.add("highlight-task");
+              setTimeout(() => {
+                taskElementRef.classList.remove("highlight-task");
+              }, 2000);
+
+              return; // Stop after finding the first incomplete task
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error scrolling to incomplete task:", error);
     }
   };
 
@@ -510,77 +559,6 @@ export default function TaskCard() {
     return Object.values(progressData).every((value) => value === true);
   };
 
-  // Function to reset tasks after completion
-  const resetAllTasks = async (taskId: string) => {
-    try {
-      // Default progress structure with all tasks set to false
-      const defaultProgress = {
-        task1: false,
-        task2: false,
-        task3: false,
-        task4: false,
-        task5: false,
-        task6: false,
-        task7: false,
-        task8: false,
-        task9: false,
-        task10: false,
-        task11: false,
-        task12: false,
-        task13: false,
-        task14: false,
-        task15: false,
-        task16: false,
-        task17: false,
-        task18: false,
-        task19: false,
-        task20: false,
-        task21: false,
-        task22: false,
-        task23: false,
-        task24: false,
-        task25: false,
-        task26: false,
-        task27: false,
-        task28: false,
-        task29: false,
-        task30: false,
-        task31: false,
-        task32: false,
-        task33: false,
-        task34: false,
-        task35: false,
-        task36: false,
-      };
-
-      // Update the task with reset progress
-      const result = await updateTask(taskId, {
-        progress: JSON.stringify(defaultProgress),
-        last_edit: new Date().toISOString(),
-      });
-
-      if (result.data) {
-        setTasks((prevTasks) =>
-          prevTasks.map((t) =>
-            t.$id === taskId
-              ? { ...t, progress: JSON.stringify(defaultProgress) }
-              : t
-          )
-        );
-
-        toast.success(
-          "All tasks completed! Tasks have been reset for the next round."
-        );
-      }
-
-      return result;
-    } catch (error) {
-      console.error("Error resetting tasks:", error);
-      toast.error("Failed to reset tasks. Please try again.");
-      return { error: "Failed to reset tasks" };
-    }
-  };
-
   const handleCompleteTask = async (taskId: string, taskKey: string) => {
     try {
       const task = tasks.find((t) => t.$id === taskId);
@@ -622,11 +600,9 @@ export default function TaskCard() {
             duration: 5000,
           });
 
-          // Wait for 5 seconds before resetting tasks to allow for celebration
-          setTimeout(async () => {
-            await resetAllTasks(taskId);
-            await fetchTasks();
-          }, 5000);
+          // Remove the automatic reset
+          // No longer waiting 5 seconds to reset tasks
+          await fetchTasks(); // Just refresh the tasks
         } else {
           // If not all tasks are completed, just refresh the tasks
           await fetchTasks();
@@ -658,10 +634,18 @@ export default function TaskCard() {
           (today.getTime() - lastEdit.getTime()) / (1000 * 60 * 60)
         );
         if (hoursSinceReset < 24) {
-          resetStatus = `Tasks were reset ${hoursSinceReset} hour${
+          // Indicate whether the tasks were reset automatically or manually
+          const resetType =
+            currentTask.allow_system_reset === false
+              ? "manually reset"
+              : "reset";
+          resetStatus = `Tasks were ${resetType} ${hoursSinceReset} hour${
             hoursSinceReset !== 1 ? "s" : ""
           } ago.`;
         }
+      } else if (currentTask.allow_system_reset === false) {
+        // Add message if task was not auto-reset due to setting
+        resetStatus = "Auto-reset is disabled for this task.";
       }
     }
 
@@ -785,62 +769,6 @@ export default function TaskCard() {
     }
   };
 
-  const isTaskAvailable = (taskKey: string, progressData: ProgressData) => {
-    if (taskKey.startsWith("paywall")) return true;
-
-    const taskKeys = Object.keys(progressData).filter(
-      (k) => !k.startsWith("paywall")
-    );
-    const paywallKeys = Object.keys(progressData).filter((k) =>
-      k.startsWith("paywall")
-    );
-
-    if (!taskKey.startsWith("paywall")) {
-      const taskMatch = taskKey.match(/task(\d+)/);
-      if (taskMatch) {
-        const currentTaskNum = parseInt(taskMatch[1]);
-
-        if (currentTaskNum === 1) return true;
-
-        const prevTaskKey = `task${currentTaskNum - 1}`;
-
-        if (progressData[prevTaskKey] === true) return true;
-      }
-    }
-
-    const currentIndex = taskKeys.indexOf(taskKey);
-
-    if (currentIndex === 0) return true;
-
-    if (currentIndex > 0) {
-      const previousTask = taskKeys[currentIndex - 1];
-      const previousTaskCompleted = progressData[previousTask] === true;
-
-      if (!previousTaskCompleted) return false;
-    }
-
-    const requiredPaywalls = paywallKeys.filter((paywallKey) => {
-      const paywallMatch = paywallKey.match(/paywall(\d+)/);
-      const taskMatch = taskKey.match(/task(\d+)/);
-
-      if (paywallMatch && taskMatch) {
-        const paywallIndex = parseInt(paywallMatch[1]);
-        const taskIndex = parseInt(taskMatch[1]);
-        return paywallIndex < taskIndex;
-      }
-
-      const paywallPosition = Object.keys(progressData).indexOf(paywallKey);
-      const taskPosition = Object.keys(progressData).indexOf(taskKey);
-      return paywallPosition < taskPosition;
-    });
-
-    const allRequiredPaywallsCompleted =
-      requiredPaywalls.length === 0 ||
-      requiredPaywalls.every((paywall) => progressData[paywall] === true);
-
-    return allRequiredPaywallsCompleted;
-  };
-
   const renderTaskItems = (task: Task) => {
     try {
       if (!task.progress) return null;
@@ -869,6 +797,12 @@ export default function TaskCard() {
         return (
           <div
             key={key}
+            // Add a ref to each task item for scrolling
+            ref={(el) => {
+              if (el) {
+                taskItemRefs.current.set(`${task.$id}-${key}`, el);
+              }
+            }}
             className={`p-3 rounded-md mb-2 transition-all duration-300 ${
               completed
                 ? "bg-green-100 dark:bg-green-900/20"
@@ -877,7 +811,7 @@ export default function TaskCard() {
                 : requirementExists && !requirementMet
                 ? "bg-amber-100 dark:bg-amber-900/20"
                 : "bg-muted/30"
-            }`}
+            } highlight-transition`}
           >
             {isPaywall ? (
               <div className="flex items-center gap-2">
@@ -980,6 +914,63 @@ export default function TaskCard() {
       console.error("Error rendering task items:", error);
       return <p>Error loading tasks</p>;
     }
+  };
+
+  // Also fix the isTaskAvailable function which appears to be corrupted
+  const isTaskAvailable = (taskKey: string, progressData: ProgressData) => {
+    if (taskKey.startsWith("paywall")) return true;
+
+    const taskKeys = Object.keys(progressData).filter(
+      (k) => !k.startsWith("paywall")
+    );
+    const paywallKeys = Object.keys(progressData).filter((k) =>
+      k.startsWith("paywall")
+    );
+
+    if (!taskKey.startsWith("paywall")) {
+      const taskMatch = taskKey.match(/task(\d+)/);
+      if (taskMatch) {
+        const currentTaskNum = parseInt(taskMatch[1]);
+
+        if (currentTaskNum === 1) return true;
+
+        const prevTaskKey = `task${currentTaskNum - 1}`;
+
+        if (progressData[prevTaskKey] === true) return true;
+      }
+    }
+
+    const currentIndex = taskKeys.indexOf(taskKey);
+
+    if (currentIndex === 0) return true;
+
+    if (currentIndex > 0) {
+      const previousTask = taskKeys[currentIndex - 1];
+      const previousTaskCompleted = progressData[previousTask] === true;
+
+      if (!previousTaskCompleted) return false;
+    }
+
+    const requiredPaywalls = paywallKeys.filter((paywallKey) => {
+      const paywallMatch = paywallKey.match(/paywall(\d+)/);
+      const taskMatch = taskKey.match(/task(\d+)/);
+
+      if (paywallMatch && taskMatch) {
+        const paywallIndex = parseInt(paywallMatch[1]);
+        const taskIndex = parseInt(taskMatch[1]);
+        return paywallIndex < taskIndex;
+      }
+
+      const paywallPosition = Object.keys(progressData).indexOf(paywallKey);
+      const taskPosition = Object.keys(progressData).indexOf(taskKey);
+      return paywallPosition < taskPosition;
+    });
+
+    const allRequiredPaywallsCompleted =
+      requiredPaywalls.length === 0 ||
+      requiredPaywalls.every((paywall) => progressData[paywall] === true);
+
+    return allRequiredPaywallsCompleted;
   };
 
   // Function to format currency
@@ -1307,6 +1298,19 @@ export default function TaskCard() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Add CSS for highlight animation */}
+      <style jsx global>{`
+        .highlight-transition {
+          transition: all 0.5s ease-in-out;
+        }
+
+        .highlight-task {
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+          transform: scale(1.03);
+          z-index: 10;
+        }
+      `}</style>
     </>
   );
 }
@@ -1556,19 +1560,7 @@ function ProductTaskDialog({
 
   return (
     <div className="p-4">
-      <DialogHeader>
-        <DialogTitle>Complete Task with {product.name}</DialogTitle>
-        <DialogDescription>
-          {hasSufficientFunds
-            ? `Purchase ${
-                requiredAmount ? `${requiredAmount} units of` : ""
-              } this product to complete your task`
-            : "You need more funds to purchase this product"}
-        </DialogDescription>
-      </DialogHeader>
-
-      <div className="mt-6 space-y-4 max-h-[70vh] overflow-y-auto pr-1">
-        {/* Product image carousel */}
+      <div className="flex flex-col items-center">
         <div className="aspect-square w-full">
           {product.image_urls && product.image_urls.length > 0 ? (
             <ProductImageCarousel
@@ -1583,42 +1575,26 @@ function ProductTaskDialog({
             />
           )}
         </div>
+        <h2 className="text-lg font-semibold mt-4">{product.name}</h2>
+        <p className={showFullDescription ? "" : "line-clamp-3"}>
+          {product.description}
+        </p>
+        {product.description && product.description.length > 150 && (
+          <button
+            onClick={() => setShowFullDescription(!showFullDescription)}
+            className="text-sm text-blue-500 hover:text-blue-700 mt-1 focus:outline-none"
+          >
+            {showFullDescription ? "Show less" : "Show more"}
+          </button>
+        )}
+      </div>
 
-        <div>
-          <h3 className="text-xl font-semibold">{product.name}</h3>
-          <div className="mt-1 text-muted-foreground">
-            <p className={showFullDescription ? "" : "line-clamp-3"}>
-              {product.description}
-            </p>
-            {product.description && product.description.length > 150 && (
-              <button
-                onClick={() => setShowFullDescription(!showFullDescription)}
-                className="text-sm text-blue-500 hover:text-blue-700 mt-1 focus:outline-none"
-              >
-                {showFullDescription ? "Show less" : "Show more"}
-              </button>
-            )}
-          </div>
-
-          <div className="mt-4 flex items-center flex-wrap">
-            {product.discount_rate > 0 ? (
-              <>
-                <p className="text-2xl font-bold">
-                  {formatCurrency(finalPrice)}
-                </p>
-                <p className="ml-2 text-muted-foreground line-through">
-                  {formatCurrency(product.price)}
-                </p>
-                <span className="ml-2 bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded dark:bg-green-900 dark:text-green-300">
-                  {product.discount_rate}% OFF
-                </span>
-              </>
-            ) : (
-              <p className="text-2xl font-bold">
-                {formatCurrency(product.price)}
-              </p>
-            )}
-          </div>
+      <div className="mt-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">Price</h3>
+          <p className="text-lg font-bold text-green-500">
+            {formatCurrency(finalPrice)}
+          </p>
         </div>
 
         {requiredAmount !== null && (

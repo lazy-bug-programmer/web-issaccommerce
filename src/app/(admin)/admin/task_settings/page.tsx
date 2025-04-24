@@ -50,6 +50,8 @@ import { cn } from "@/lib/utils";
 interface Product {
   $id: string;
   name: string;
+  price: number;
+  discount_rate: number;
 }
 
 interface Seller {
@@ -206,6 +208,18 @@ export default function TaskSettingsPage() {
     );
   }
 
+  // Helper to calculate discounted price
+  const getDisplayPrice = (product: Product) => {
+    if (!product.price) return "$0.00";
+
+    if (product.discount_rate) {
+      const discountedPrice = product.price * (1 - product.discount_rate / 100);
+      return `$${discountedPrice.toFixed(2)} (${product.discount_rate}% off)`;
+    }
+
+    return `$${product.price.toFixed(2)}`;
+  };
+
   const renderTaskCards = (
     data: Record<string, TaskItem>,
     isEditable: boolean
@@ -235,15 +249,21 @@ export default function TaskSettingsPage() {
                       <SelectItem value="none">None</SelectItem>
                       {products.map((product) => (
                         <SelectItem key={product.$id} value={product.$id}>
-                          {product.name}
+                          {product.name} - {getDisplayPrice(product)}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 ) : (
                   <div className="border rounded p-2 bg-muted">
-                    {products.find((p) => p.$id === data[taskKey]?.product_id)
-                      ?.name || "None"}
+                    {(() => {
+                      const product = products.find(
+                        (p) => p.$id === data[taskKey]?.product_id
+                      );
+                      return product
+                        ? `${product.name} - ${getDisplayPrice(product)}`
+                        : "None";
+                    })()}
                   </div>
                 )}
               </div>

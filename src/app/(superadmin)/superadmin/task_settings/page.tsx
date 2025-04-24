@@ -36,6 +36,8 @@ interface TaskItem {
 interface Product {
   $id: string;
   name: string;
+  price: number;
+  discount_rate: number;
 }
 
 export default function TaskSettingsPage() {
@@ -100,6 +102,18 @@ export default function TaskSettingsPage() {
         [field]: actualValue,
       },
     }));
+  };
+
+  // Helper to calculate discounted price
+  const getDisplayPrice = (product: Product) => {
+    if (!product.price) return "$0.00";
+
+    if (product.discount_rate) {
+      const discountedPrice = product.price * (1 - product.discount_rate / 100);
+      return `$${discountedPrice.toFixed(2)} (${product.discount_rate}% off)`;
+    }
+
+    return `$${product.price.toFixed(2)}`;
   };
 
   const saveTaskSettings = async () => {
@@ -173,7 +187,7 @@ export default function TaskSettingsPage() {
                       <SelectItem value="none">None</SelectItem>
                       {products.map((product) => (
                         <SelectItem key={product.$id} value={product.$id}>
-                          {product.name}
+                          {product.name} - {getDisplayPrice(product)}
                         </SelectItem>
                       ))}
                     </SelectContent>
