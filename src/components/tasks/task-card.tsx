@@ -12,19 +12,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { getUserTasks, updateTask } from "@/lib/actions/task.action";
 import { Task } from "@/lib/domains/task.domain";
-import { LockIcon, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { MoneyRainAnimation } from "@/components/animations/money-rain";
 import { RainbowExplosion } from "@/components/animations/rainbox-explosion";
 import { FireworksDisplay } from "@/components/animations/fireworks-display";
@@ -43,19 +34,23 @@ import { getUserOrders } from "@/lib/actions/orders.action";
 import { Orders } from "@/lib/domains/orders.domain";
 import { TaskItem } from "@/lib/actions/task-settings.action";
 import { toast } from "sonner";
-import {
-  getProductById,
-  updateProduct,
-  getProductImage,
-} from "@/lib/actions/product.action";
 import { Product } from "@/lib/domains/products.domain";
 import { getUserSales, updateSale } from "@/lib/actions/sales.action";
 import { Sale } from "@/lib/domains/sales.domain";
-import { createOrder } from "@/lib/actions/orders.action";
 import { getReferralCodeByCode } from "@/lib/actions/referral-code.action";
 import { getAdminById } from "@/lib/actions/admin.action";
 import { getUserPrefs } from "@/lib/actions/auth.action";
 import { productCache } from "@/lib/utils/product-cache";
+import { TaskItemComponent } from "./task-item";
+import { CompletionDialog } from "./completion-dialog";
+import { ProductTaskDialog } from "./product-task-dialog";
+import {
+  isTaskAvailable,
+  getProgressPercentage,
+  hasCompletedTaskRequirement,
+  formatCurrency,
+  isTrialBonusDateToday,
+} from "./task-utils";
 
 // Types for the progress JSON structure
 interface ProgressData {
@@ -164,32 +159,7 @@ export default function TaskCard() {
     });
   };
 
-  // Function to fetch product details for task requirements
-  const fetchProductDetails = async (productId: string) => {
-    if (loadingProducts[productId] || productDetails[productId]) {
-      return;
-    }
-
-    setLoadingProducts((prev) => ({ ...prev, [productId]: true }));
-
-    try {
-      // Use getOrFetch from cache to prevent duplicate requests and ensure caching
-      const product = await productCache.getOrFetch(productId);
-
-      if (product) {
-        setProductDetails((prev) => ({
-          ...prev,
-          [productId]: product,
-        }));
-      }
-    } catch (error) {
-      console.error(`Error fetching product ${productId}:`, error);
-    } finally {
-      setLoadingProducts((prev) => ({ ...prev, [productId]: false }));
-    }
-  };
-
-  // Add new function to fetch multiple products at once
+  // Function to fetch multiple products at once
   const fetchMultipleProducts = async (productIds: string[]) => {
     // Filter out products that are already loaded or being loaded
     const idsToFetch = productIds.filter(
@@ -273,11 +243,42 @@ export default function TaskCard() {
     }
   };
 
-  // Update the task settings function to use batch fetching
+  // Modified to fetch admin task settings first, then default task settings
   const fetchTaskSettings = async () => {
     try {
-      // First fetch default task settings
-      const result = await getTaskSettingsById("task-settings");
+      // 1. First fetch admin task settings if we have an admin ID
+      const userAdminId = adminId || (await fetchUserReferralAdmin());
+
+      if (userAdminId) {
+        const adminSettingsResult = await fetchAdminTaskSettings(userAdminId);
+
+        // 2. If admin task settings specify a default_task_settings_id, use that
+        if (
+          adminSettingsResult &&
+          adminSettingsResult.default_task_settings_id
+        ) {
+          await fetchDefaultTaskSettings(
+            adminSettingsResult.default_task_settings_id
+          );
+        } else {
+          // Fallback to the original "task-settings" if no default is specified
+          await fetchDefaultTaskSettings("task-settings");
+        }
+      } else {
+        // If no admin is associated, fallback to the original "task-settings"
+        await fetchDefaultTaskSettings("task-settings");
+      }
+    } catch (error) {
+      console.error("Error fetching task settings:", error);
+      // Fallback to default task settings if anything fails
+      await fetchDefaultTaskSettings("task-settings");
+    }
+  };
+
+  // Split the original fetchTaskSettings into two functions
+  const fetchDefaultTaskSettings = async (taskSettingsId: string) => {
+    try {
+      const result = await getTaskSettingsById(taskSettingsId);
       if (result.data) {
         const settingsData = JSON.parse(result.data.settings);
         setTaskSettings(settingsData);
@@ -294,21 +295,22 @@ export default function TaskCard() {
         if (productIds.length > 0) {
           await fetchMultipleProducts(productIds);
         }
-      } else {
-        console.error("No default task settings found");
-      }
 
-      // Now try to fetch admin-specific task settings if we have an admin ID
-      const userAdminId = adminId || (await fetchUserReferralAdmin());
-      if (userAdminId) {
-        await fetchAdminTaskSettings(userAdminId);
+        return result.data;
+      } else {
+        console.error(`No task settings found with ID ${taskSettingsId}`);
+        return null;
       }
     } catch (error) {
-      console.error("Error fetching task settings:", error);
+      console.error(
+        `Error fetching task settings with ID ${taskSettingsId}:`,
+        error
+      );
+      return null;
     }
   };
 
-  // Also update the admin task settings function
+  // Modified to return the admin task settings
   const fetchAdminTaskSettings = async (adminId: string) => {
     try {
       const result = await getTaskSettingsByAdminId(adminId);
@@ -329,6 +331,8 @@ export default function TaskCard() {
           if (productIds.length > 0) {
             await fetchMultipleProducts(productIds);
           }
+
+          return result.data;
         } else {
           console.log(
             `Admin task settings found but has no settings data for ${adminId}`
@@ -337,8 +341,10 @@ export default function TaskCard() {
       } else {
         console.log(`No task settings found for admin ${adminId}`);
       }
+      return null;
     } catch (error) {
       console.error("Error fetching admin task settings:", error);
+      return null;
     }
   };
 
@@ -407,41 +413,7 @@ export default function TaskCard() {
     return taskSettings[taskKey];
   };
 
-  // Function to check if user has completed a task requirement - modified for admin tasks
-  const hasCompletedTaskRequirement = (taskKey: string): boolean => {
-    if (!userOrders) {
-      return false;
-    }
-
-    const taskRequirement = getTaskRequirement(taskKey);
-    if (
-      !taskRequirement ||
-      !taskRequirement.product_id ||
-      taskRequirement.product_id === ""
-    ) {
-      return true;
-    }
-
-    const today = new Date();
-
-    return userOrders.some((order) => {
-      const orderDate = new Date(order.ordered_at);
-      const isToday =
-        orderDate.getDate() === today.getDate() &&
-        orderDate.getMonth() === today.getMonth() &&
-        orderDate.getFullYear() === today.getFullYear();
-
-      const matchesProduct = order.product_id === taskRequirement.product_id;
-      const matchesAmount =
-        !taskRequirement.amount ||
-        taskRequirement.amount === "" ||
-        Number(order.amount) >= Number(taskRequirement.amount);
-
-      return isToday && matchesProduct && matchesAmount;
-    });
-  };
-
-  // Enhanced function to fetch tasks - modified to check allow_system_reset
+  // Enhanced function to fetch tasks
   const fetchTasks = async () => {
     setLoading(true);
     try {
@@ -453,6 +425,9 @@ export default function TaskCard() {
         setTasks(taskData);
         assignAnimationsToTasks(taskData);
 
+        // Modified order:
+        // 1. Fetch task settings (which now internally fetches in the correct order)
+        // 2. Fetch orders and sales data
         if (!taskSettings) {
           await fetchTaskSettings();
         }
@@ -660,7 +635,11 @@ export default function TaskCard() {
     }
 
     const taskRequirements = getTaskRequirement(taskKey);
-    const isRequirementMet = hasCompletedTaskRequirement(taskKey);
+    const isRequirementMet = hasCompletedTaskRequirement(
+      taskKey,
+      userOrders,
+      getTaskRequirement
+    );
 
     // Fetch product details if not already loaded
     if (
@@ -752,20 +731,28 @@ export default function TaskCard() {
     };
   }, []);
 
-  const getProgressPercentage = (task: Task) => {
+  // Function for fetching product details
+  const fetchProductDetails = async (productId: string) => {
+    if (loadingProducts[productId] || productDetails[productId]) {
+      return;
+    }
+
+    setLoadingProducts((prev) => ({ ...prev, [productId]: true }));
+
     try {
-      if (!task.progress) return 0;
+      // Use getOrFetch from cache to prevent duplicate requests and ensure caching
+      const product = await productCache.getOrFetch(productId);
 
-      const progressData: ProgressData = JSON.parse(task.progress);
-      const totalTasks = Object.keys(progressData).length;
-      const completedTasks = Object.values(progressData).filter(
-        (val) => val === true
-      ).length;
-
-      return Math.round((completedTasks / totalTasks) * 100);
+      if (product) {
+        setProductDetails((prev) => ({
+          ...prev,
+          [productId]: product,
+        }));
+      }
     } catch (error) {
-      console.error("Error calculating progress:", error);
-      return 0;
+      console.error(`Error fetching product ${productId}:`, error);
+    } finally {
+      setLoadingProducts((prev) => ({ ...prev, [productId]: false }));
     }
   };
 
@@ -784,217 +771,36 @@ export default function TaskCard() {
         });
       }
 
-      return Object.entries(progressData).map(([key, completed]) => {
-        const isPaywall = key.startsWith("paywall");
-        const available = isTaskAvailable(key, progressData);
-        const requirement = getTaskRequirement(key);
-        const requirementMet = hasCompletedTaskRequirement(key);
-        const requirementExists =
-          requirement &&
-          requirement.product_id &&
-          requirement.product_id !== "";
-
-        return (
-          <div
-            key={key}
-            // Add a ref to each task item for scrolling
-            ref={(el) => {
-              if (el) {
-                taskItemRefs.current.set(`${task.$id}-${key}`, el);
-              }
-            }}
-            className={`p-3 rounded-md mb-2 transition-all duration-300 ${
-              completed
-                ? "bg-green-100 dark:bg-green-900/20"
-                : !available && !isPaywall
-                ? "bg-gray-100 dark:bg-gray-800"
-                : requirementExists && !requirementMet
-                ? "bg-amber-100 dark:bg-amber-900/20"
-                : "bg-muted/30"
-            } highlight-transition`}
-          >
-            {isPaywall ? (
-              <div className="flex items-center gap-2">
-                <LockIcon size={16} className="text-amber-500" />
-                <div>
-                  <h4 className="font-semibold text-amber-500">
-                    Premium Content
-                  </h4>
-                  <p className="text-sm text-muted-foreground">
-                    Purchase to unlock the next set of tasks
-                  </p>
-                  {!completed && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-2 bg-amber-500/10 border-amber-500 text-amber-600"
-                      onClick={handleUnlockPremium}
-                    >
-                      Unlock Premium
-                    </Button>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="flex justify-between items-center">
-                <div>
-                  <h4
-                    className={`font-semibold capitalize ${
-                      !available && !completed
-                        ? "text-gray-400 dark:text-gray-500"
-                        : ""
-                    }`}
-                  >
-                    {key.replace(/([A-Z])/g, " $1").trim()}{" "}
-                    {/* Show admin indicator if using admin task settings */}
-                    {adminTaskSettings &&
-                      adminTaskSettings[key] &&
-                      adminTaskSettings[key].product_id ===
-                        requirement?.product_id && (
-                        <span className="text-xs text-blue-500 ml-1"></span>
-                      )}
-                  </h4>
-                  <p className="text-sm text-muted-foreground">
-                    {completed
-                      ? "Completed!"
-                      : !available
-                      ? "Complete previous tasks first"
-                      : "Please complete the task"}
-                  </p>
-                </div>
-                {!completed && available && (
-                  <>
-                    {requirementExists && !requirementMet ? (
-                      <div className="flex items-center ml-2">
-                        <AlertCircle
-                          size={16}
-                          className="text-amber-500 mr-1"
-                        />
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-amber-500 text-amber-600 bg-amber-50 dark:bg-amber-900/20"
-                          onClick={() =>
-                            setProductDialog({
-                              open: true,
-                              productId: requirement.product_id,
-                              taskId: task.$id,
-                              taskKey: key,
-                            })
-                          }
-                        >
-                          Start Your Task
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button
-                        size="sm"
-                        onClick={() => openCompletionDialog(task.$id, key)}
-                        className="ml-2 bg-gradient-to-r from-green-400 to-emerald-600 hover:from-green-500 hover:to-emerald-700 shadow-sm"
-                      >
-                        Complete
-                      </Button>
-                    )}
-                  </>
-                )}
-                {!completed && !available && !isPaywall && (
-                  <LockIcon size={16} className="text-gray-400 ml-2" />
-                )}
-                {completed && (
-                  <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
-                    <span className="text-white text-xs">✓</span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        );
-      });
+      return Object.entries(progressData).map(([key, completed]) => (
+        <TaskItemComponent
+          key={key}
+          taskId={task.$id}
+          taskKey={key}
+          completed={completed}
+          available={isTaskAvailable(key, progressData)}
+          requirement={getTaskRequirement(key)}
+          requirementMet={hasCompletedTaskRequirement(
+            key,
+            userOrders,
+            getTaskRequirement
+          )}
+          onCompleteTask={openCompletionDialog}
+          onUnlockPremium={handleUnlockPremium}
+          setProductDialog={setProductDialog}
+          ref={(el) => {
+            if (el) {
+              taskItemRefs.current.set(
+                `${task.$id}-${key}`,
+                el as HTMLDivElement
+              );
+            }
+          }}
+        />
+      ));
     } catch (error) {
       console.error("Error rendering task items:", error);
       return <p>Error loading tasks</p>;
     }
-  };
-
-  // Also fix the isTaskAvailable function which appears to be corrupted
-  const isTaskAvailable = (taskKey: string, progressData: ProgressData) => {
-    if (taskKey.startsWith("paywall")) return true;
-
-    const taskKeys = Object.keys(progressData).filter(
-      (k) => !k.startsWith("paywall")
-    );
-    const paywallKeys = Object.keys(progressData).filter((k) =>
-      k.startsWith("paywall")
-    );
-
-    if (!taskKey.startsWith("paywall")) {
-      const taskMatch = taskKey.match(/task(\d+)/);
-      if (taskMatch) {
-        const currentTaskNum = parseInt(taskMatch[1]);
-
-        if (currentTaskNum === 1) return true;
-
-        const prevTaskKey = `task${currentTaskNum - 1}`;
-
-        if (progressData[prevTaskKey] === true) return true;
-      }
-    }
-
-    const currentIndex = taskKeys.indexOf(taskKey);
-
-    if (currentIndex === 0) return true;
-
-    if (currentIndex > 0) {
-      const previousTask = taskKeys[currentIndex - 1];
-      const previousTaskCompleted = progressData[previousTask] === true;
-
-      if (!previousTaskCompleted) return false;
-    }
-
-    const requiredPaywalls = paywallKeys.filter((paywallKey) => {
-      const paywallMatch = paywallKey.match(/paywall(\d+)/);
-      const taskMatch = taskKey.match(/task(\d+)/);
-
-      if (paywallMatch && taskMatch) {
-        const paywallIndex = parseInt(paywallMatch[1]);
-        const taskIndex = parseInt(taskMatch[1]);
-        return paywallIndex < taskIndex;
-      }
-
-      const paywallPosition = Object.keys(progressData).indexOf(paywallKey);
-      const taskPosition = Object.keys(progressData).indexOf(taskKey);
-      return paywallPosition < taskPosition;
-    });
-
-    const allRequiredPaywallsCompleted =
-      requiredPaywalls.length === 0 ||
-      requiredPaywalls.every((paywall) => progressData[paywall] === true);
-
-    return allRequiredPaywallsCompleted;
-  };
-
-  // Function to format currency
-  const formatCurrency = (amount: number | null | undefined) => {
-    if (amount === null || amount === undefined) return "₹0.00";
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 2,
-    }).format(amount);
-  };
-
-  // Function to check if trial_bonus_date is today
-  const isTrialBonusDateToday = (sale: Sale | null): boolean => {
-    if (!sale || !sale.trial_bonus_date) return false;
-
-    const trialBonusDate = new Date(sale.trial_bonus_date);
-    const today = new Date();
-
-    return (
-      trialBonusDate.getDate() === today.getDate() &&
-      trialBonusDate.getMonth() === today.getMonth() &&
-      trialBonusDate.getFullYear() === today.getFullYear()
-    );
   };
 
   // Function to handle product completion
@@ -1193,73 +999,12 @@ export default function TaskCard() {
         </AnimatePresence>
       </div>
 
-      <Dialog
-        open={completionDialog.open}
-        onOpenChange={(open) => {
-          if (!open) closeCompletionDialog();
-        }}
-        modal={true}
-      >
-        <DialogContent className="sm:max-w-md backdrop-blur-sm bg-white/90 dark:bg-gray-950/90 border-2 border-primary shadow-2xl z-50">
-          <div className="relative z-10">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold">
-                Congratulations!
-              </DialogTitle>
-              <DialogDescription>
-                You&apos;ve completed your task! Click the button below to
-                confirm and continue to unlock the next task.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="py-8 flex items-center justify-center">
-              <div className="bg-white/90 dark:bg-black/90 p-5 rounded-lg text-center shadow-lg border border-gray-200 dark:border-gray-800">
-                <h3 className="text-lg font-semibold mb-2">
-                  Great job on completing this step!
-                </h3>
-                <p className="text-sm mb-4">Continue to unlock more tasks.</p>
-                {completionDialog.resetStatus && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 mb-3">
-                    {completionDialog.resetStatus}
-                  </p>
-                )}
-                {completionDialog.taskRequirements?.product_id &&
-                  completionDialog.isRequirementMet && (
-                    <p className="text-xs text-green-600 dark:text-green-400 mt-2 mb-3">
-                      {`Required purchase: ${
-                        completionDialog.taskRequirements.amount
-                          ? `${completionDialog.taskRequirements.amount} × `
-                          : ""
-                      }${
-                        productDetails[
-                          completionDialog.taskRequirements.product_id
-                        ]?.name ||
-                        `Product ${completionDialog.taskRequirements.product_id}`
-                      }`}
-                    </p>
-                  )}
-                <div className="w-full h-1 bg-gradient-to-r from-green-400 to-emerald-600 mt-2"></div>
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button
-                onClick={() => {
-                  handleCompleteTask(
-                    completionDialog.taskId,
-                    completionDialog.taskKey
-                  );
-                  closeCompletionDialog();
-                }}
-                className="bg-gradient-to-r from-green-400 to-emerald-600 hover:from-green-500 hover:to-emerald-700 shadow-sm"
-                size="lg"
-              >
-                Complete Task
-              </Button>
-            </DialogFooter>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <CompletionDialog
+        dialogState={completionDialog}
+        onClose={closeCompletionDialog}
+        onComplete={handleCompleteTask}
+        productDetails={productDetails}
+      />
 
       {/* Add Product Dialog */}
       <Dialog
@@ -1275,7 +1020,7 @@ export default function TaskCard() {
         }}
         modal={true}
       >
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-xl md:max-w-2xl lg:max-w-3xl">
           {productDialog.productId && (
             <ProductTaskDialog
               productId={productDialog.productId}
@@ -1312,529 +1057,5 @@ export default function TaskCard() {
         }
       `}</style>
     </>
-  );
-}
-
-// New component for the product task dialog
-function ProductTaskDialog({
-  productId,
-  onComplete,
-  onCancel,
-}: {
-  productId: string;
-  onComplete: () => void;
-  onCancel: () => void;
-}) {
-  const router = useRouter(); // Added router hook for navigation
-  const [product, setProduct] = useState<Product | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [quantity, setQuantity] = useState(1);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [userSale, setUserSale] = useState<Sale | null>(null);
-  const [hasSufficientFunds, setHasSufficientFunds] = useState(false);
-  const [totalAvailableFunds, setTotalAvailableFunds] = useState(0);
-  const [showFullDescription, setShowFullDescription] = useState(false);
-  const [requiredAmount, setRequiredAmount] = useState<number | null>(null);
-
-  useEffect(() => {
-    const fetchProduct = async () => {
-      setLoading(true);
-      try {
-        // Use enhanced cache method
-        const product = await productCache.getOrFetch(productId);
-
-        if (product) {
-          setProduct(product);
-        } else {
-          toast.error("Product not found");
-        }
-      } catch (error) {
-        console.error("Failed to fetch product:", error);
-        toast.error("Failed to load product details");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    const fetchUserSale = async () => {
-      try {
-        const result = await getUserSales();
-        if (result.data && result.data.length > 0) {
-          setUserSale(result.data[0] as unknown as Sale);
-        }
-      } catch (error) {
-        console.error("Error fetching user sales data:", error);
-      }
-    };
-
-    // Fetch task settings to get required amount
-    const fetchTaskSettingsForProduct = async () => {
-      try {
-        const result = await getTaskSettingsById("task-settings");
-        if (result.data && result.data.settings) {
-          const settingsData = JSON.parse(result.data.settings);
-
-          // Find task that requires this product
-          const taskEntry = Object.entries(settingsData).find(
-            ([_, taskItem]: [string, unknown]) =>
-              typeof taskItem === "object" &&
-              taskItem !== null &&
-              "product_id" in taskItem &&
-              taskItem.product_id === productId
-          );
-
-          if (
-            taskEntry &&
-            typeof taskEntry[1] === "object" &&
-            taskEntry[1] !== null &&
-            "amount" in taskEntry[1] &&
-            taskEntry[1].amount
-          ) {
-            const amount = parseInt(String(taskEntry[1].amount));
-            if (!isNaN(amount)) {
-              setRequiredAmount(amount);
-              setQuantity(amount); // Set initial quantity to required amount
-            }
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching task settings for product:", error);
-      }
-    };
-
-    if (productId) {
-      fetchProduct();
-      fetchUserSale();
-      fetchTaskSettingsForProduct();
-    }
-  }, [productId]);
-
-  // Check if user has sufficient funds when product and userSale are loaded
-  useEffect(() => {
-    if (product && userSale) {
-      const finalPrice = calculatePrice(product.price, product.discount_rate);
-      const totalCost = finalPrice * quantity;
-
-      // Check if trial_bonus_date is today
-      const today = new Date().toDateString();
-      const isTrialBonusToday = userSale.trial_bonus_date
-        ? new Date(userSale.trial_bonus_date).toDateString() === today
-        : false;
-
-      // Calculate available money based on trial bonus date
-      const totalMoney = isTrialBonusToday
-        ? (userSale.trial_bonus || 0) + (userSale.balance || 0)
-        : userSale.balance || 0;
-
-      setTotalAvailableFunds(totalMoney);
-
-      // Set state based on whether user has enough money
-      if (totalMoney < totalCost) {
-        setErrorMessage(
-          `Insufficient balance. Please topup via Customer Service`
-        );
-        setHasSufficientFunds(false);
-      } else {
-        setHasSufficientFunds(true);
-        setErrorMessage("");
-      }
-    }
-  }, [product, userSale, quantity]);
-
-  // Calculate discounted price
-  const calculatePrice = (price: number, discountRate: number) => {
-    return price - (price * discountRate) / 100;
-  };
-
-  // Format currency
-  const formatCurrency = (price: number) => {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "USD",
-    }).format(price);
-  };
-
-  const handlePurchaseAndComplete = async () => {
-    if (!product || !userSale || !hasSufficientFunds) {
-      return;
-    }
-
-    // Verify quantity matches required amount if specified
-    if (requiredAmount !== null && quantity !== requiredAmount) {
-      setErrorMessage(
-        `You must purchase exactly ${requiredAmount} units to complete this task.`
-      );
-      return;
-    }
-
-    setIsProcessing(true);
-
-    try {
-      const finalPrice = calculatePrice(product.price, product.discount_rate);
-      const totalCost = finalPrice * quantity;
-
-      // 1. Update product quantity
-      const updatedProduct = await updateProduct(product.$id, {
-        quantity: product.quantity - quantity,
-      });
-
-      if (!updatedProduct.data) {
-        throw new Error("Failed to update product quantity");
-      }
-
-      // 2. Calculate cashback (3% of total cost)
-      const cashbackAmount = totalCost * 0.03;
-
-      // 3. Update user's balance based on available funds
-      const updateData: Partial<Sale> = {
-        balance: (userSale.balance || 0) + cashbackAmount,
-        today_bonus: (userSale.today_bonus || 0) + cashbackAmount,
-        today_bonus_date: new Date(),
-        total_earning: (userSale.total_earning || 0) + cashbackAmount,
-      };
-
-      const updatedSale = await updateSale(userSale.$id, updateData);
-
-      if (!updatedSale.data) {
-        throw new Error("Failed to update user balance");
-      }
-
-      // 4. Create an order record
-      const orderResult = await createOrder({
-        product_id: product.$id,
-        amount: quantity,
-        shipment_automation_id: "",
-      });
-
-      if (!orderResult.data) {
-        console.error(
-          "Warning: Order record creation failed, but payment was processed"
-        );
-      }
-
-      toast.success(
-        `Successfully purchased ${quantity} ${
-          product.name
-        }! Earned ${cashbackAmount.toFixed(2)} cashback.`
-      );
-
-      // Small delay to ensure backend has processed the order
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // Call the onComplete to continue the task flow
-      onComplete();
-    } catch (error) {
-      console.error("Error processing purchase:", error);
-      setErrorMessage("Failed to process purchase. Please try again.");
-      setIsProcessing(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="p-6 flex flex-col items-center justify-center min-h-[300px]">
-        <div className="animate-spin h-10 w-10 border-4 border-primary border-t-transparent rounded-full mb-4"></div>
-        <p>Loading product details...</p>
-      </div>
-    );
-  }
-
-  if (!product) {
-    return (
-      <div className="p-6 text-center">
-        <AlertCircle className="mx-auto h-12 w-12 text-red-500 mb-4" />
-        <h3 className="text-lg font-medium">Product not found</h3>
-        <p className="mt-2 text-muted-foreground">
-          The requested product could not be found.
-        </p>
-        <Button className="mt-4" onClick={onCancel}>
-          Close
-        </Button>
-      </div>
-    );
-  }
-
-  const finalPrice = calculatePrice(product.price, product.discount_rate);
-  const totalCost = finalPrice * quantity;
-
-  return (
-    <div className="p-4">
-      <div className="flex flex-col items-center">
-        <div className="aspect-square w-full">
-          {product.image_urls && product.image_urls.length > 0 ? (
-            <ProductImageCarousel
-              imageUrls={product.image_urls}
-              productName={product.name}
-            />
-          ) : (
-            <img
-              src="/placeholder.svg?height=200&width=200"
-              alt={product.name}
-              className="h-full w-full object-cover"
-            />
-          )}
-        </div>
-        <h2 className="text-lg font-semibold mt-4">{product.name}</h2>
-        <p className={showFullDescription ? "" : "line-clamp-3"}>
-          {product.description}
-        </p>
-        {product.description && product.description.length > 150 && (
-          <button
-            onClick={() => setShowFullDescription(!showFullDescription)}
-            className="text-sm text-blue-500 hover:text-blue-700 mt-1 focus:outline-none"
-          >
-            {showFullDescription ? "Show less" : "Show more"}
-          </button>
-        )}
-      </div>
-
-      <div className="mt-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Price</h3>
-          <p className="text-lg font-bold text-green-500">
-            {formatCurrency(finalPrice)}
-          </p>
-        </div>
-
-        {requiredAmount !== null && (
-          <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md border border-blue-200 dark:border-blue-800">
-            <p className="text-blue-700 dark:text-blue-300 font-medium flex items-center gap-2">
-              <AlertCircle size={16} />
-              This task requires purchasing exactly {requiredAmount}{" "}
-              {requiredAmount === 1 ? "unit" : "units"}
-            </p>
-          </div>
-        )}
-
-        <div className="bg-muted/20 p-3 rounded-md">
-          <p className="flex justify-between font-medium">
-            <span>Cost:</span>
-            <span>{formatCurrency(totalCost)}</span>
-          </p>
-          {requiredAmount !== null && (
-            <p className="text-sm text-muted-foreground mt-1">
-              Fixed quantity: {requiredAmount}{" "}
-              {requiredAmount === 1 ? "unit" : "units"}
-            </p>
-          )}
-        </div>
-
-        {errorMessage && (
-          <div className="flex items-center gap-2 text-red-500 bg-red-50 p-2 rounded border border-red-200">
-            <AlertCircle size={16} />
-            <p className="text-sm">{errorMessage}</p>
-          </div>
-        )}
-
-        <div className="border rounded p-3 bg-muted/30">
-          <div className="text-sm space-y-1">
-            <p className="font-medium">Your Balance:</p>
-            <div className="flex flex-col text-muted-foreground">
-              {userSale?.trial_bonus_date &&
-              new Date(userSale.trial_bonus_date).toDateString() ===
-                new Date().toDateString() ? (
-                <span>Trial: {formatCurrency(userSale?.trial_bonus || 0)}</span>
-              ) : null}
-              <span>Regular: {formatCurrency(userSale?.balance || 0)}</span>
-              <span
-                className={`border-t pt-1 font-medium ${
-                  hasSufficientFunds ? "text-foreground" : "text-red-500"
-                }`}
-              >
-                Total: {formatCurrency(totalAvailableFunds)}
-                {!hasSufficientFunds &&
-                  ` (-${formatCurrency(
-                    totalCost - totalAvailableFunds
-                  )}, please contact Customer Service)`}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <DialogFooter className="mt-6 flex flex-row gap-2 w-full">
-        <div>
-          <Button variant="outline" onClick={onCancel} className="w-full">
-            Cancel
-          </Button>
-          <Button
-            variant="outline"
-            className="w-full bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-200"
-            onClick={() => router.push("/contact")}
-          >
-            Customer Service
-          </Button>
-        </div>
-
-        <Button
-          className="w-full bg-gradient-to-r from-green-400 to-emerald-600 hover:from-green-500 hover:to-emerald-700"
-          onClick={handlePurchaseAndComplete}
-          disabled={isProcessing || !hasSufficientFunds}
-        >
-          {isProcessing
-            ? "Processing..."
-            : hasSufficientFunds
-            ? "Complete"
-            : "Insufficient Funds"}
-        </Button>
-      </DialogFooter>
-    </div>
-  );
-}
-
-// Image component that handles loading the image
-function ProductImage({
-  imageId,
-  productName,
-}: {
-  imageId: string;
-  productName: string;
-}) {
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const fetchImage = async () => {
-      try {
-        // Use the cache's fetchImage method to get the image URL
-        const cachedUrl = await productCache.fetchImage(imageId);
-
-        if (!isMounted) return;
-
-        if (cachedUrl) {
-          setImageUrl(cachedUrl);
-          setIsLoading(false);
-        } else {
-          setError("Failed to load image");
-          setIsLoading(false);
-        }
-      } catch (err) {
-        if (!isMounted) return;
-        console.error("Error loading image:", err);
-        setError("Error loading image");
-        setIsLoading(false);
-      }
-    };
-
-    if (imageId) {
-      fetchImage();
-    } else {
-      setIsLoading(false);
-    }
-
-    return () => {
-      isMounted = false;
-      // Don't revoke URLs that are cached - they'll be managed by the cache
-    };
-  }, [imageId]);
-
-  if (isLoading) {
-    return (
-      <div className="aspect-square w-full bg-gray-100 flex items-center justify-center">
-        <span className="text-gray-400">Loading...</span>
-      </div>
-    );
-  }
-
-  if (error || !imageUrl) {
-    return (
-      <div className="aspect-square w-full bg-gray-100 flex items-center justify-center">
-        <span className="text-gray-400">{error || "No image"}</span>
-      </div>
-    );
-  }
-
-  return (
-    <img
-      src={imageUrl}
-      alt={productName}
-      className="h-full w-full object-cover"
-    />
-  );
-}
-
-// Carousel component for displaying multiple product images
-function ProductImageCarousel({
-  imageUrls,
-  productName,
-}: {
-  imageUrls: string[];
-  productName: string;
-}) {
-  const [currentIndex, setCurrentIndex] = useState(0);
-
-  const goToPrevious = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setCurrentIndex((prevIndex) =>
-      prevIndex === 0 ? imageUrls.length - 1 : prevIndex - 1
-    );
-  };
-
-  const goToNext = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setCurrentIndex((prevIndex) =>
-      prevIndex === imageUrls.length - 1 ? 0 : prevIndex + 1
-    );
-  };
-
-  // If no images, show placeholder
-  if (!imageUrls || imageUrls.length === 0) {
-    return (
-      <div className="aspect-square w-full bg-gray-100 flex items-center justify-center">
-        <span className="text-gray-400">No images</span>
-      </div>
-    );
-  }
-
-  // If only one image, don't need navigation
-  if (imageUrls.length === 1) {
-    return <ProductImage imageId={imageUrls[0]} productName={productName} />;
-  }
-
-  return (
-    <div className="relative aspect-square w-full overflow-hidden">
-      <div className="h-full w-full">
-        <ProductImage
-          imageId={imageUrls[currentIndex]}
-          productName={productName}
-        />
-      </div>
-
-      {/* Navigation arrows */}
-      <div className="absolute inset-0 flex items-center justify-between p-2">
-        <Button
-          variant="secondary"
-          size="icon"
-          className="h-8 w-8 rounded-full bg-white/70 shadow hover:bg-white/90"
-          onClick={goToPrevious}
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="secondary"
-          size="icon"
-          className="h-8 w-8 rounded-full bg-white/70 shadow hover:bg-white/90"
-          onClick={goToNext}
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-      </div>
-
-      {/* Indicators */}
-      <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1">
-        {imageUrls.map((_, index) => (
-          <div
-            key={index}
-            className={`h-1.5 w-1.5 rounded-full ${
-              index === currentIndex ? "bg-white" : "bg-white/50"
-            }`}
-          />
-        ))}
-      </div>
-    </div>
   );
 }

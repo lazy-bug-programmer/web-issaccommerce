@@ -129,12 +129,12 @@ export default function OrdersPage() {
 
     if (discountRate > 0) {
       const finalPrice = price * (1 - discountRate / 100);
-      return `$${finalPrice.toFixed(2)} (${discountRate}% off $${price.toFixed(
+      return `৳${finalPrice.toFixed(2)} (${discountRate}% off ৳${price.toFixed(
         2
       )})`;
     }
 
-    return `$${price.toFixed(2)}`;
+    return `৳${price.toFixed(2)}`;
   };
 
   // Calculate total price for an order
@@ -304,7 +304,7 @@ export default function OrdersPage() {
                     {!loadingProducts &&
                     productData[selectedOrder.product_id] ? (
                       <span className="font-medium">
-                        ${calculateOrderTotal(selectedOrder).toFixed(2)}
+                        ৳{calculateOrderTotal(selectedOrder).toFixed(2)}
                       </span>
                     ) : (
                       <span className="inline-flex items-center">
@@ -319,7 +319,7 @@ export default function OrdersPage() {
                     {!loadingProducts &&
                     productData[selectedOrder.product_id] ? (
                       <span className="font-medium text-green-600">
-                        ${calculateCommission(selectedOrder).toFixed(2)}
+                        ৳{calculateCommission(selectedOrder).toFixed(2)}
                       </span>
                     ) : (
                       <span className="inline-flex items-center">

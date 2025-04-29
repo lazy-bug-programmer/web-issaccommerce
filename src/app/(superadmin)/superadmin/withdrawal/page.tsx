@@ -240,7 +240,7 @@ export default function WithdrawalPage() {
           );
         } else {
           toast.success(
-            `Withdrawal approved and balance updated: $${newBalance.toFixed(2)}`
+            `Withdrawal approved and balance updated: ৳${newBalance.toFixed(2)}`
           );
 
           // Update only the balance in the sales cache
@@ -348,7 +348,7 @@ export default function WithdrawalPage() {
   function getWithdrawalAmount(withdrawal: Withdrawal, userId: string) {
     if (withdrawal.amount || withdrawal.withdraw_amount) {
       const amount = withdrawal.amount || withdrawal.withdraw_amount || 0;
-      return `$${amount.toFixed(2)}`;
+      return `৳${amount.toFixed(2)}`;
     }
 
     if (loadingSales[userId]) {
@@ -361,7 +361,7 @@ export default function WithdrawalPage() {
     }
 
     // Use balance as the withdrawal amount since we've updated the sales domain
-    return `$${sales.balance.toFixed(2)}`;
+    return `৳${sales.balance.toFixed(2)}`;
   }
 
   function handleSearch(e: React.FormEvent) {

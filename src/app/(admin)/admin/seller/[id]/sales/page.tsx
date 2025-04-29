@@ -276,7 +276,7 @@ export default function SellerSalesPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                ${sale?.balance.toFixed(2) || "0.00"}
+                ৳{sale?.balance.toFixed(2) || "0.00"}
               </div>
             </CardContent>
           </Card>
@@ -289,7 +289,7 @@ export default function SellerSalesPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                ${sale?.total_earning.toFixed(2) || "0.00"}
+                ৳{sale?.total_earning.toFixed(2) || "0.00"}
               </div>
             </CardContent>
           </Card>
@@ -300,7 +300,7 @@ export default function SellerSalesPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                $
+                ৳
                 {sale?.trial_bonus !== null
                   ? sale?.trial_bonus.toFixed(2)
                   : "0.00"}
@@ -334,7 +334,7 @@ export default function SellerSalesPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                $
+                ৳
                 {sale?.today_bonus !== null
                   ? sale?.today_bonus.toFixed(2)
                   : "0.00"}

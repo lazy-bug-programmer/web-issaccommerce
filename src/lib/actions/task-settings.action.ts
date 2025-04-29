@@ -17,7 +17,9 @@ export interface TaskItem {
 // Type definition for the task settings
 export interface TaskSettings {
     $id?: string;
-    settings: string; // JSON string of task settings
+    settings: string;
+    name?: string;
+    default_task_settings_id?: string;
 }
 
 // Helper function to create a regular client
@@ -290,22 +292,74 @@ export async function getUserTaskSettings() {
     }
 }
 
-// Get all sellers for task assignment (admin only function)
-export async function getAllSellersForTaskAssignment() {
+// Get all superadmin task settings (those with no user_id)
+export async function getAllSuperadminTaskSettings() {
     try {
         const user = await getLoggedInUser();
         if (!user) {
             return { error: "Not authorized" };
         }
 
-        // Check if user is admin
-        const isAdmin = user.labels && (
-            user.labels.includes("ADMIN") ||
-            user.labels.includes("SUPERADMIN")
+        const { databases } = await createClient();
+
+        // Get all task settings with no user_id (superadmin settings)
+        // We'll use "isNull" for empty user_id and also include the default task-settings
+        const superadminSettings = await databases.listDocuments(
+            DATABASE_ID,
+            TASK_SETTINGS_COLLECTION_ID,
+            [Query.or([
+                Query.isNull("user_id"),
+                Query.equal("$id", "task-settings")
+            ])]
         );
 
-        if (!isAdmin) {
-            return { error: "Only admins can access seller list" };
+        return {
+            data: superadminSettings.documents,
+            total: superadminSettings.total
+        };
+    } catch (error: any) {
+        console.error("Error getting superadmin task settings:", error);
+        return { error: error.message || "Failed to get superadmin task settings", total: 0 };
+    }
+}
+
+// Create additional superadmin task settings
+export async function createAdditionalSuperadminTaskSettings(name: string) {
+    try {
+        const user = await getLoggedInUser();
+        if (!user) {
+            return { error: "Not authorized" };
+        }
+
+        const { databases } = await createAdminClient();
+
+        // Get empty settings
+        const emptySettings = await getEmptyTaskSettings();
+
+        // Create new task settings with empty user_id
+        const newTaskSettings = await databases.createDocument(
+            DATABASE_ID,
+            TASK_SETTINGS_COLLECTION_ID,
+            "unique()", // Use unique ID
+            {
+                settings: emptySettings,
+                name: name // Store the name for identification
+            }
+        );
+
+        return { data: newTaskSettings };
+    } catch (error: any) {
+        console.error("Error creating additional superadmin task settings:", error);
+        return { error: error.message || "Failed to create additional superadmin task settings" };
+    }
+}
+
+// Get all sellers for task assignment (admin only function)
+export async function getAllSellersForTaskAssignment() {
+    try {
+        const user = await getLoggedInUser();
+        if (!user) {
+            return { error: "Not authorized" };
         }
 
         const { users } = await createAdminClient();
@@ -326,25 +380,5 @@ export async function getAllSellersForTaskAssignment() {
     } catch (error: any) {
         console.error("Error getting sellers for task assignment:", error);
         return { error: error.message || "Failed to get sellers" };
-    }
-}
-
-// Check if current user is admin
-export async function isCurrentUserAdmin() {
-    try {
-        const user = await getLoggedInUser();
-        if (!user) {
-            return { isAdmin: false, error: "Not authenticated" };
-        }
-
-        const isAdmin = user.labels && (
-            user.labels.includes("ADMIN") ||
-            user.labels.includes("SUPERADMIN")
-        );
-
-        return { isAdmin };
-    } catch (error: any) {
-        console.error("Error checking admin status:", error);
-        return { isAdmin: false, error: error.message || "Failed to check admin status" };
     }
 }

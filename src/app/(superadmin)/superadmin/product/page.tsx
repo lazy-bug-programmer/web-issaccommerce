@@ -705,7 +705,7 @@ export default function ProductsPage() {
                       name="price"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Price ($)</FormLabel>
+                          <FormLabel>Price (৳)</FormLabel>
                           <FormControl>
                             <Input
                               type="number"
@@ -896,13 +896,13 @@ export default function ProductsPage() {
                         {product.description}
                       </TableCell>
                       <TableCell className="text-right">
-                        ${product.price.toFixed(2)}
+                        ৳{product.price.toFixed(2)}
                       </TableCell>
                       <TableCell className="text-right">
                         {product.discount_rate}%
                       </TableCell>
                       <TableCell className="text-right">
-                        $
+                        ৳
                         {calculateFinalPrice(
                           product.price,
                           product.discount_rate

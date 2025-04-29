@@ -263,19 +263,19 @@ export default function ProductDisplay({ products }: { products: Product[] }) {
                 {product.discount_rate > 0 ? (
                   <div>
                     <p className="text-2xl font-bold">
-                      $
+                      ৳
                       {calculateFinalPrice(
                         product.price,
                         product.discount_rate
                       ).toFixed(2)}
                     </p>
                     <p className="text-sm text-muted-foreground line-through">
-                      ${product.price.toFixed(2)}
+                      ৳{product.price.toFixed(2)}
                     </p>
                   </div>
                 ) : (
                   <p className="text-2xl font-bold">
-                    ${product.price.toFixed(2)}
+                    ৳{product.price.toFixed(2)}
                   </p>
                 )}
                 <p className="text-sm text-muted-foreground">

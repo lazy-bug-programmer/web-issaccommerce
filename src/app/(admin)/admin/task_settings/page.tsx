@@ -8,7 +8,8 @@ import {
   createTaskSettings,
   TaskItem,
   getAllSellersForTaskAssignment,
-  isCurrentUserAdmin,
+  getAllSuperadminTaskSettings,
+  getTaskSettingsById,
 } from "@/lib/actions/task-settings.action";
 import { getProducts } from "@/lib/actions/product.action";
 import { Button } from "@/components/ui/button";
@@ -60,6 +61,18 @@ interface Seller {
   email: string;
 }
 
+interface SuperadminTaskSetting {
+  $id: string;
+  name?: string;
+  settings: string;
+}
+
+// Add truncate function near the top of the file
+const truncateText = (text: string, maxLength: number = 20) => {
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + "...";
+};
+
 export default function TaskSettingsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [taskSettings, setTaskSettings] = useState<TaskSettings | null>(null);
@@ -74,15 +87,19 @@ export default function TaskSettingsPage() {
   const [selectedPopoverTask, setSelectedPopoverTask] = useState<string | null>(
     null
   );
+  const [superadminTaskSettings, setSuperadminTaskSettings] = useState<
+    SuperadminTaskSetting[]
+  >([]);
+  const [selectedDefaultTaskSettings, setSelectedDefaultTaskSettings] =
+    useState<string>("none");
+  const [isTemplateSelected, setIsTemplateSelected] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
       try {
         setIsLoading(true);
 
-        // Check if current user is admin
-        const adminResult = await isCurrentUserAdmin();
-        setIsAdmin(adminResult.isAdmin);
+        setIsAdmin(true);
 
         // Fetch products for dropdown
         const productsResult = await getProducts(100);
@@ -90,12 +107,18 @@ export default function TaskSettingsPage() {
           setProducts(productsResult.data as unknown as Product[]);
         }
 
+        // Fetch all superadmin task settings
+        const superadminResult = await getAllSuperadminTaskSettings();
+        if (superadminResult.data) {
+          setSuperadminTaskSettings(
+            superadminResult.data as unknown as SuperadminTaskSetting[]
+          );
+        }
+
         // Fetch all sellers if user is admin
-        if (adminResult.isAdmin) {
-          const sellersResult = await getAllSellersForTaskAssignment();
-          if (sellersResult.data) {
-            setSellers(sellersResult.data as Seller[]);
-          }
+        const sellersResult = await getAllSellersForTaskAssignment();
+        if (sellersResult.data) {
+          setSellers(sellersResult.data as Seller[]);
         }
 
         // Get admin task settings for comparison
@@ -107,8 +130,21 @@ export default function TaskSettingsPage() {
         // Get user-specific task settings
         const userResult = await getUserTaskSettings();
         if (userResult.data) {
-          setTaskSettings(userResult.data as unknown as TaskSettings);
-          setTaskData(JSON.parse(userResult.data.settings));
+          const userData = userResult.data as unknown as TaskSettings;
+          setTaskSettings(userData);
+
+          // Parse settings
+          const parsedSettings = JSON.parse(userData.settings);
+          setTaskData(parsedSettings);
+
+          // Check if default_task_settings_id is defined
+          if (userData.default_task_settings_id) {
+            setSelectedDefaultTaskSettings(userData.default_task_settings_id);
+            setIsTemplateSelected(true);
+
+            // Fetch the reference settings
+            await loadReferenceSettings(userData.default_task_settings_id);
+          }
         } else if (userResult.error) {
           toast.error(userResult.error);
         }
@@ -122,6 +158,41 @@ export default function TaskSettingsPage() {
 
     fetchData();
   }, []);
+
+  // Load reference settings
+  const loadReferenceSettings = async (templateId: string) => {
+    if (!templateId || templateId === "none") return;
+
+    try {
+      setIsLoading(true);
+
+      const result = await getTaskSettingsById(templateId);
+      if (result.data) {
+        // Set the reference data
+        setAdminTaskData(JSON.parse(result.data.settings));
+        toast.success("Reference template loaded successfully");
+      } else {
+        toast.error("Failed to load reference template");
+      }
+    } catch (error) {
+      console.error("Error loading reference template:", error);
+      toast.error("Failed to load reference template");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle template selection
+  const handleReferenceTemplateChange = async (templateId: string) => {
+    setSelectedDefaultTaskSettings(templateId);
+
+    if (templateId && templateId !== "none") {
+      setIsTemplateSelected(true);
+      await loadReferenceSettings(templateId);
+    } else {
+      setIsTemplateSelected(false);
+    }
+  };
 
   const handleTaskChange = (
     taskKey: string,
@@ -173,6 +244,11 @@ export default function TaskSettingsPage() {
 
   const saveTaskSettings = async () => {
     try {
+      if (selectedDefaultTaskSettings === "none") {
+        toast.error("Please select a reference template first");
+        return;
+      }
+
       setIsLoading(true);
 
       const settingsStr = JSON.stringify(taskData);
@@ -181,10 +257,13 @@ export default function TaskSettingsPage() {
       if (taskSettings?.$id) {
         result = await updateTaskSettings(taskSettings.$id, {
           settings: settingsStr,
+          default_task_settings_id: selectedDefaultTaskSettings,
         });
       } else {
         result = await createTaskSettings({
           settings: settingsStr,
+          default_task_settings_id: selectedDefaultTaskSettings,
+          name: "",
         });
       }
 
@@ -220,6 +299,20 @@ export default function TaskSettingsPage() {
     return `$${product.price.toFixed(2)}`;
   };
 
+  // Helper to get actual price value (for sorting)
+  const getActualPrice = (product: Product) => {
+    if (!product.price) return 0;
+    if (product.discount_rate) {
+      return product.price * (1 - product.discount_rate / 100);
+    }
+    return product.price;
+  };
+
+  // Sort products by price (highest to lowest)
+  const sortedProducts = [...products].sort(
+    (a, b) => getActualPrice(b) - getActualPrice(a)
+  );
+
   const renderTaskCards = (
     data: Record<string, TaskItem>,
     isEditable: boolean
@@ -247,9 +340,19 @@ export default function TaskSettingsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">None</SelectItem>
-                      {products.map((product) => (
+                      {sortedProducts.map((product) => (
                         <SelectItem key={product.$id} value={product.$id}>
-                          {product.name} - {getDisplayPrice(product)}
+                          <div className="flex justify-between">
+                            <span
+                              className="truncate mr-2"
+                              title={product.name}
+                            >
+                              {truncateText(product.name)}
+                            </span>
+                            <span className="whitespace-nowrap">
+                              {getDisplayPrice(product)}
+                            </span>
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -260,9 +363,18 @@ export default function TaskSettingsPage() {
                       const product = products.find(
                         (p) => p.$id === data[taskKey]?.product_id
                       );
-                      return product
-                        ? `${product.name} - ${getDisplayPrice(product)}`
-                        : "None";
+                      return product ? (
+                        <div className="flex justify-between">
+                          <span className="truncate mr-2" title={product.name}>
+                            {truncateText(product.name)}
+                          </span>
+                          <span className="whitespace-nowrap">
+                            {getDisplayPrice(product)}
+                          </span>
+                        </div>
+                      ) : (
+                        "None"
+                      );
                     })()}
                   </div>
                 )}
@@ -317,7 +429,7 @@ export default function TaskSettingsPage() {
                                 toggleUserAssignment(taskKey, userId)
                               }
                             >
-                              ×
+                              x
                             </button>
                           </Badge>
                         ) : null;
@@ -430,16 +542,62 @@ export default function TaskSettingsPage() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Task Settings</h1>
         {activeTab === "user" && (
-          <Button onClick={saveTaskSettings} disabled={isLoading}>
+          <Button
+            onClick={saveTaskSettings}
+            disabled={isLoading || selectedDefaultTaskSettings === "none"}
+          >
             {isLoading ? "Saving..." : "Save Settings"}
           </Button>
         )}
       </div>
 
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Reference Template</CardTitle>
+          <CardDescription>
+            Select a superadmin template to use as your reference
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="reference-template">Template</Label>
+              <Select
+                value={selectedDefaultTaskSettings}
+                onValueChange={handleReferenceTemplateChange}
+              >
+                <SelectTrigger id="reference-template">
+                  <SelectValue placeholder="Select a template" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Select a template</SelectItem>
+                  {superadminTaskSettings.map((setting) => (
+                    <SelectItem key={setting.$id} value={setting.$id}>
+                      {setting.$id === "task-settings"
+                        ? "Default Template"
+                        : setting.name || `Template ${setting.$id.slice(0, 8)}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {!isTemplateSelected && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-md text-amber-700">
+                <p>
+                  You must select a reference template before you can save your
+                  task settings.
+                </p>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
         <TabsList>
           <TabsTrigger value="user">Your Settings</TabsTrigger>
-          <TabsTrigger value="admin">Admin Settings (Reference)</TabsTrigger>
+          <TabsTrigger value="admin">Reference Template</TabsTrigger>
         </TabsList>
         <TabsContent value="user">
           {renderTaskCards(taskData, true)}
@@ -447,11 +605,22 @@ export default function TaskSettingsPage() {
         <TabsContent value="admin">
           <div className="text-center p-4 mb-4 bg-muted rounded-lg">
             <p>
-              These are the admin-defined reference settings. You cannot edit
-              them.
+              These are the reference template settings. You cannot edit them.
             </p>
           </div>
-          {renderTaskCards(adminTaskData, false)}
+          {isTemplateSelected ? (
+            renderTaskCards(adminTaskData, false)
+          ) : (
+            <div className="text-center p-8 bg-muted rounded-lg">
+              <p className="text-lg mb-4">
+                Please select a reference template first
+              </p>
+              <p className="text-muted-foreground">
+                You need to select a superadmin template to view reference
+                settings.
+              </p>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

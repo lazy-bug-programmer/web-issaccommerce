@@ -459,7 +459,7 @@ export default function MyPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    ${balance?.balance.toFixed(2) || "0.00"}
+                    ৳{balance?.balance.toFixed(2) || "0.00"}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
                     This is the amount available for withdrawal
@@ -475,7 +475,7 @@ export default function MyPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    ${balance?.total_earning.toFixed(2) || "0.00"}
+                    ৳{balance?.total_earning.toFixed(2) || "0.00"}
                   </div>
                 </CardContent>
               </Card>
@@ -488,7 +488,7 @@ export default function MyPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    $
+                    ৳
                     {balance?.trial_bonus_date &&
                     isToday(balance.trial_bonus_date)
                       ? balance?.trial_bonus.toFixed(2)
@@ -511,7 +511,7 @@ export default function MyPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    $
+                    ৳
                     {balance?.today_bonus_date &&
                     isToday(balance.today_bonus_date)
                       ? balance?.today_bonus.toFixed(2)
@@ -564,7 +564,7 @@ export default function MyPage() {
                     placeholder="Enter amount"
                   />
                   <p className="text-sm text-muted-foreground">
-                    Available balance: ${balance?.balance.toFixed(2) || "0.00"}
+                    Available balance: ৳{balance?.balance.toFixed(2) || "0.00"}
                   </p>
                 </div>
               </div>
@@ -602,7 +602,7 @@ export default function MyPage() {
                           {formatDate(withdrawal.requested_at)}
                         </TableCell>
                         <TableCell>
-                          ${withdrawal.withdraw_amount.toFixed(2) || "0.00"}
+                          ৳{withdrawal.withdraw_amount.toFixed(2) || "0.00"}
                         </TableCell>
                         <TableCell>
                           {getStatusBadge(withdrawal.status)}
